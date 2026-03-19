@@ -11,6 +11,10 @@ class WidgetTriggers extends CController {
     private const DEFAULT_TRAFFIC_IN_PATTERN = 'net.if.in[*]';
     private const DEFAULT_TRAFFIC_OUT_PATTERN = 'net.if.out[*]';
     private const DEFAULT_SPEED_PATTERN = 'net.if.speed[*]';
+    private const DEFAULT_STATUS_PATTERN = 'net.if.status[*]';
+    private const DEFAULT_ROW_COUNT = 2;
+    private const MAX_ROW_COUNT = 6;
+    private const MAX_PORTS_PER_ROW = 24;
 
     protected function init(): void {
         $this->disableCsrfValidation();
@@ -21,7 +25,9 @@ class WidgetTriggers extends CController {
             'hostid' => 'required|id',
             'traffic_in_item_pattern' => 'string',
             'traffic_out_item_pattern' => 'string',
-            'speed_item_pattern' => 'string'
+            'speed_item_pattern' => 'string',
+            'status_item_pattern' => 'string',
+            'row_count' => 'string'
         ]);
     }
 
@@ -43,11 +49,22 @@ class WidgetTriggers extends CController {
             (string) $this->getInput('speed_item_pattern', self::DEFAULT_SPEED_PATTERN),
             self::DEFAULT_SPEED_PATTERN
         );
+        $status_pattern = $this->sanitizeItemPattern(
+            (string) $this->getInput('status_item_pattern', self::DEFAULT_STATUS_PATTERN),
+            self::DEFAULT_STATUS_PATTERN
+        );
+        $requested_row_count = $this->clamp(
+            $this->extractPositiveInt($this->getInput('row_count', self::DEFAULT_ROW_COUNT)),
+            1,
+            self::MAX_ROW_COUNT
+        );
         $discovery = PortDiscovery::discover($hostid, [
             'traffic_in' => $traffic_in_pattern,
             'traffic_out' => $traffic_out_pattern,
-            'speed' => $speed_pattern
+            'speed' => $speed_pattern,
+            'status' => $status_pattern
         ]);
+        $layout = $this->calculateLayout($discovery['ports'] ?? [], $requested_row_count);
 
         $rows = API::Trigger()->get([
             'output' => ['triggerid', 'description', 'priority'],
@@ -80,7 +97,7 @@ class WidgetTriggers extends CController {
             'main_block' => json_encode([
                 'triggers' => $result,
                 'ports' => $ports,
-                'layout' => $discovery['layout'] ?? null,
+                'layout' => $layout,
                 'recommended_items' => $recommended_items
             ])
         ]));
@@ -93,6 +110,38 @@ class WidgetTriggers extends CController {
         }
 
         return substr($value, 0, 255);
+    }
+
+    private function extractPositiveInt($value): int {
+        if (is_array($value)) {
+            $value = reset($value);
+        }
+
+        $value = trim((string) $value);
+        return ctype_digit($value) ? (int) $value : 0;
+    }
+
+    private function clamp(int $value, int $min, int $max): int {
+        return max($min, min($max, $value));
+    }
+
+    private function calculateLayout(array $ports, int $requested_row_count): array {
+        $visible_ports = array_values(array_slice($ports, 0, 96));
+        $total_ports = count($visible_ports);
+        $sfp_ports = count(array_filter($visible_ports, static fn(array $port): bool => !empty($port['is_sfp'])));
+        $base_ports = max(0, $total_ports - $sfp_ports);
+        $row_count = $base_ports > 0 ? min($requested_row_count, $base_ports) : 1;
+        $ports_per_row = $base_ports > 0
+            ? $this->clamp((int) ceil($base_ports / $row_count), 1, self::MAX_PORTS_PER_ROW)
+            : 1;
+
+        return [
+            'row_count' => $row_count,
+            'ports_per_row' => $ports_per_row,
+            'sfp_ports' => $sfp_ports,
+            'total_ports' => $total_ports,
+            'base_ports' => $base_ports
+        ];
     }
 
     private function findRecommendedMetadataItems(string $hostid): array {

@@ -157,8 +157,20 @@ $chip_row
     ->addItem(
         (new CDiv())
             ->addClass('swx-chip')
+            ->addItem((new CTag('span', true, ''))->addClass('swx-chip-dot')->setAttribute('style', '--dot-color: '.(!empty($summary['up_ports']) ? '#34D399' : '#94A3B8').';'))
+            ->addItem($tr('Up ports %d', 'Up端口 %d', (int) ($summary['up_ports'] ?? 0)))
+    )
+    ->addItem(
+        (new CDiv())
+            ->addClass('swx-chip')
+            ->addItem((new CTag('span', true, ''))->addClass('swx-chip-dot')->setAttribute('style', '--dot-color: '.(!empty($summary['down_ports']) ? '#F59E0B' : '#94A3B8').';'))
+            ->addItem($tr('Down ports %d', 'Down端口 %d', (int) ($summary['down_ports'] ?? 0)))
+    )
+    ->addItem(
+        (new CDiv())
+            ->addClass('swx-chip')
             ->addItem((new CTag('span', true, ''))->addClass('swx-chip-dot')->setAttribute('style', '--dot-color: '.(!empty($summary['problem_ports']) ? '#FB7185' : '#34D399').';'))
-            ->addItem($tr('Problem ports %d', '异常端口 %d', (int) ($summary['problem_ports'] ?? 0)))
+            ->addItem($tr('Alert ports %d', '异常端口 %d', (int) ($summary['problem_ports'] ?? 0)))
     );
 $header->addItem($chip_row);
 $widget->addItem($header);
@@ -171,14 +183,14 @@ $metric_cards = [
         'meta' => $tr('ports bound to triggers', '已绑定触发器的端口')
     ],
     [
-        'label' => $tr('Healthy', '正常端口'),
+        'label' => $tr('Up', '在线端口'),
         'value' => (string) ((int) ($summary['healthy_ports'] ?? 0)),
-        'meta' => $tr('ports currently in OK state', '当前处于正常状态的端口')
+        'meta' => $tr('ports currently up', '当前处于在线状态的端口')
     ],
     [
         'label' => $tr('Layout', '布局'),
         'value' => sprintf('%d x %d', (int) ($layout['row_count'] ?? 0), (int) ($layout['ports_per_row'] ?? 0)),
-        'meta' => $tr('SFP uplinks %d', 'SFP 上联 %d', (int) ($layout['sfp_ports'] ?? 0))
+        'meta' => $tr('auto layout', '自动布局')
     ],
     [
         'label' => $tr('Peak Util', '峰值利用率'),
@@ -247,7 +259,10 @@ $panel->addItem($panel_head);
 $grid = (new CDiv())->addClass('swx-grid');
 $make_port = static function(array $port) use ($show_overlay, $format_rate, $tr) {
     $state = $tr('Idle', '空闲');
-    if (!empty($port['has_trigger'])) {
+    if (!empty($port['status_label'])) {
+        $state = (string) $port['status_label'];
+    }
+    elseif (!empty($port['has_trigger'])) {
         $state = !empty($port['is_problem'])
             ? $tr('Alert', '告警')
             : $tr('Online', '在线');

@@ -44,7 +44,8 @@ class PortDiscovery {
         foreach ([
             'traffic_in' => (string) ($patterns['traffic_in'] ?? ''),
             'traffic_out' => (string) ($patterns['traffic_out'] ?? ''),
-            'speed' => (string) ($patterns['speed'] ?? '')
+            'speed' => (string) ($patterns['speed'] ?? ''),
+            'status' => (string) ($patterns['status'] ?? '')
         ] as $type => $pattern) {
             $regex = self::buildPatternRegex($pattern);
             if ($regex !== null) {
@@ -88,6 +89,7 @@ class PortDiscovery {
                         'traffic_in_token' => '',
                         'traffic_out_token' => '',
                         'speed_token' => '',
+                        'status_token' => '',
                         'default_triggerid' => ''
                     ];
                 }
@@ -125,6 +127,7 @@ class PortDiscovery {
                     'traffic_in_token' => '',
                     'traffic_out_token' => '',
                     'speed_token' => '',
+                    'status_token' => '',
                     'default_triggerid' => ''
                 ];
             }

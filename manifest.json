@@ -4,8 +4,8 @@
   "type": "widget",
   "name": "Switch Panel",
   "namespace": "SwitchPanelWidget",
-  "version": "0.1.0",
-  "author": "OpenCode",
+  "version": "0.0.1",
+  "author": "canghai809",
   "description": "Modern switch-style dashboard widget with per-port trigger states.",
   "url": "",
   "actions": {

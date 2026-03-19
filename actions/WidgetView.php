@@ -3,6 +3,7 @@
 namespace Modules\SwitchPanelWidget\Actions;
 
 use API;
+use CValueMapHelper;
 use CControllerDashboardWidgetView;
 use CControllerResponseData;
 use CWebUser;
@@ -19,10 +20,10 @@ class WidgetView extends CControllerDashboardWidgetView {
     private const THEME_EMBER = 2;
     private const DEFAULT_ROW_COUNT = 2;
     private const DEFAULT_PORTS_PER_ROW = 12;
-    private const DEFAULT_SFP_PORTS = 4;
     private const DEFAULT_TRAFFIC_IN_PATTERN = 'net.if.in[*]';
     private const DEFAULT_TRAFFIC_OUT_PATTERN = 'net.if.out[*]';
     private const DEFAULT_SPEED_PATTERN = 'net.if.speed[*]';
+    private const DEFAULT_STATUS_PATTERN = 'net.if.status[*]';
     private const DEFAULT_PORT_INDEX_START = 1;
     private const TRAFFIC_LOOKBACK_SECONDS = 1800;
     private const TRAFFIC_POINTS = 18;
@@ -60,7 +61,7 @@ class WidgetView extends CControllerDashboardWidgetView {
         $card_language_mode = (int) ($this->fields_values['card_language'] ?? self::CARD_LANGUAGE_AUTO);
         $visual_theme = $this->resolveTheme();
         $panel_scale = $this->clamp($this->extractPositiveInt($this->fields_values['panel_scale'] ?? 92), 84, 100);
-        $utilization_overlay_enabled = ((int) ($this->fields_values['utilization_overlay_enabled'] ?? 1)) === 1;
+        $utilization_overlay_enabled = true;
         $traffic_in_pattern = $this->sanitizeItemPattern(
             (string) ($this->fields_values['traffic_in_item_pattern'] ?? self::DEFAULT_TRAFFIC_IN_PATTERN),
             self::DEFAULT_TRAFFIC_IN_PATTERN
@@ -73,6 +74,10 @@ class WidgetView extends CControllerDashboardWidgetView {
             (string) ($this->fields_values['speed_item_pattern'] ?? self::DEFAULT_SPEED_PATTERN),
             self::DEFAULT_SPEED_PATTERN
         );
+        $status_pattern = $this->sanitizeItemPattern(
+            (string) ($this->fields_values['status_item_pattern'] ?? self::DEFAULT_STATUS_PATTERN),
+            self::DEFAULT_STATUS_PATTERN
+        );
         $port_index_start = max(0, $this->extractPositiveInt($this->fields_values['port_index_start'] ?? self::DEFAULT_PORT_INDEX_START));
         if ($port_index_start === 0) {
             $port_index_start = self::DEFAULT_PORT_INDEX_START;
@@ -81,7 +86,8 @@ class WidgetView extends CControllerDashboardWidgetView {
         $discovery = PortDiscovery::discover($hostid, [
             'traffic_in' => $traffic_in_pattern,
             'traffic_out' => $traffic_out_pattern,
-            'speed' => $speed_pattern
+            'speed' => $speed_pattern,
+            'status' => $status_pattern
         ]);
         $layout = $this->getLayout($discovery['ports'] ?? []);
         $ports = $this->loadPortsFromFields($layout['total_ports'], $layout['sfp_ports'], $port_index_start, $discovery['ports'] ?? []);
@@ -127,10 +133,16 @@ class WidgetView extends CControllerDashboardWidgetView {
                 (int) $port['mapped_index'],
                 (string) ($port['speed_token'] ?? '')
             );
+            $port['status_item_key'] = $this->resolvePortItemKey(
+                $status_pattern,
+                (int) $port['mapped_index'],
+                (string) ($port['status_token'] ?? '')
+            );
         }
         unset($port);
 
         $trigger_meta = $this->loadTriggerMeta($ports);
+        $active_problem_meta = $this->loadActivePortProblemMeta($hostid, $ports);
         $traffic_series = $utilization_overlay_enabled ? $this->loadTrafficSeries($hostid, $ports) : [];
         $speed_values = $utilization_overlay_enabled
             ? $this->loadLatestItemValues(
@@ -141,20 +153,32 @@ class WidgetView extends CControllerDashboardWidgetView {
                 ), static fn(string $key): bool => $key !== '')))
             )
             : [];
+        $status_values = $this->loadLatestItemValues(
+            $hostid,
+            array_values(array_unique(array_filter(array_map(
+                static fn(array $port): string => (string) ($port['status_item_key'] ?? ''),
+                $ports
+            ), static fn(string $key): bool => $key !== '')))
+        );
 
         foreach ($ports as &$port) {
             $triggerid = $port['triggerid'];
             $meta = $triggerid !== '' ? ($trigger_meta[$triggerid] ?? null) : null;
+            $problem_meta = $active_problem_meta[(int) ($port['index'] ?? 0)] ?? null;
             $port['has_trigger'] = $meta !== null;
-            $port['is_problem'] = $meta !== null ? $meta['is_problem'] : false;
-            $port['priority'] = $meta !== null ? $meta['priority'] : 0;
-            $port['trigger_name'] = $meta !== null ? $meta['description'] : '';
-            $port['active_color'] = !$port['has_trigger']
-                ? $port['default_color']
-                : ($port['is_problem'] ? $port['problem_color'] : $port['ok_color']);
-            $port['url'] = $port['has_trigger']
-                ? 'zabbix.php?action=problem.view&filter_set=1&triggerids%5B0%5D='.$triggerid
-                : '';
+            $port['has_problem_trigger'] = $problem_meta !== null;
+            $port['is_problem'] = $problem_meta !== null || ($meta !== null ? $meta['is_problem'] : false);
+            $port['priority'] = $problem_meta !== null
+                ? (int) ($problem_meta['priority'] ?? 0)
+                : ($meta !== null ? $meta['priority'] : 0);
+            $port['trigger_name'] = $problem_meta !== null
+                ? (string) ($problem_meta['description'] ?? '')
+                : ($meta !== null ? $meta['description'] : '');
+            $port['url'] = $problem_meta !== null
+                ? 'zabbix.php?action=problem.view&filter_set=1&triggerids%5B0%5D='.(string) $problem_meta['triggerid']
+                : ($port['has_trigger']
+                    ? 'zabbix.php?action=problem.view&filter_set=1&triggerids%5B0%5D='.$triggerid
+                    : '');
 
             $port['traffic_in_series'] = $traffic_series[$port['traffic_in_item_key']] ?? [];
             $port['traffic_out_series'] = $traffic_series[$port['traffic_out_item_key']] ?? [];
@@ -172,10 +196,27 @@ class WidgetView extends CControllerDashboardWidgetView {
                 $speed_key,
                 (string) ($speed_meta['units'] ?? '')
             );
+            $status_key = (string) ($port['status_item_key'] ?? '');
+            if ($status_key !== '' && array_key_exists($status_key, $status_values)) {
+                $status_meta = $status_values[$status_key];
+                $status_state = $this->normalizeInterfaceStatus(
+                    $status_meta['raw_value'] ?? null,
+                    $status_meta['mapped_value'] ?? ''
+                );
+                $port['status_value'] = $status_state['value'];
+                $port['status_label'] = $status_state['label'];
+                $port['is_online'] = $status_state['is_online'];
+            }
+            else {
+                $port['status_value'] = null;
+                $port['status_label'] = '';
+                $port['is_online'] = null;
+            }
             $port['speed_bps'] = $speed_bps;
             $peak_traffic_bps = max((float) $port['traffic_in_bps'], (float) $port['traffic_out_bps']);
             $port['utilization_percent'] = $speed_bps > 0.0 ? min(100.0, ($peak_traffic_bps / $speed_bps) * 100.0) : null;
             $port['utilization_color'] = $this->getUtilizationColor($port['utilization_percent']);
+            $port['active_color'] = $this->resolvePortColor($port);
         }
         unset($port);
 
@@ -270,23 +311,19 @@ class WidgetView extends CControllerDashboardWidgetView {
     }
 
     private function getLayout(array $discovered_ports = []): array {
+        $requested_row_count = $this->clamp(
+            $this->extractPositiveInt($this->fields_values['row_count'] ?? self::DEFAULT_ROW_COUNT),
+            1,
+            self::MAX_ROW_COUNT
+        );
+
         if ($discovered_ports !== []) {
             $visible_ports = array_slice($discovered_ports, 0, self::MAX_TOTAL_PORTS);
             $total_ports = count($visible_ports);
             $sfp_ports = count(array_filter($visible_ports, static fn(array $port): bool => !empty($port['is_sfp'])));
             $base_ports = max(0, $total_ports - $sfp_ports);
-            $ports_per_row = $this->clamp(
-                $this->extractPositiveInt($this->fields_values['ports_per_row'] ?? self::DEFAULT_PORTS_PER_ROW),
-                1,
-                self::MAX_PORTS_PER_ROW
-            );
-            $requested_row_count = $this->clamp(
-                $this->extractPositiveInt($this->fields_values['row_count'] ?? self::DEFAULT_ROW_COUNT),
-                1,
-                self::MAX_ROW_COUNT
-            );
-            $required_row_count = $base_ports > 0 ? (int) ceil($base_ports / $ports_per_row) : 1;
-            $row_count = max($requested_row_count, $required_row_count);
+            $row_count = $base_ports > 0 ? min($requested_row_count, $base_ports) : 1;
+            $ports_per_row = $this->calculatePortsPerRow($base_ports, $row_count);
 
             return [
                 'row_count' => $row_count,
@@ -297,31 +334,33 @@ class WidgetView extends CControllerDashboardWidgetView {
             ];
         }
 
-        $row_count = $this->clamp(
-            $this->extractPositiveInt($this->fields_values['row_count'] ?? self::DEFAULT_ROW_COUNT),
-            1,
-            self::MAX_ROW_COUNT
-        );
-        $ports_per_row = $this->clamp(
+        $legacy_ports_per_row = $this->clamp(
             $this->extractPositiveInt($this->fields_values['ports_per_row'] ?? self::DEFAULT_PORTS_PER_ROW),
             1,
             self::MAX_PORTS_PER_ROW
         );
-        $base_ports = $row_count * $ports_per_row;
-        $max_sfp = max(0, self::MAX_TOTAL_PORTS - $base_ports);
-        $sfp_ports = $this->clamp(
-            $this->extractNonNegativeInt($this->fields_values['sfp_ports'] ?? self::DEFAULT_SFP_PORTS),
-            0,
-            min(12, $max_sfp)
-        );
+        $sfp_ports = 0;
+        $stored_total_ports = min(self::MAX_TOTAL_PORTS, $requested_row_count * $legacy_ports_per_row);
+        $base_ports = max(0, $stored_total_ports - $sfp_ports);
+        $row_count = $base_ports > 0 ? min($requested_row_count, $base_ports) : 1;
+        $ports_per_row = $this->calculatePortsPerRow($base_ports, $row_count);
 
         return [
             'row_count' => $row_count,
             'ports_per_row' => $ports_per_row,
             'sfp_ports' => $sfp_ports,
-            'total_ports' => min(self::MAX_TOTAL_PORTS, $base_ports + $sfp_ports),
+            'total_ports' => $stored_total_ports,
             'base_ports' => $base_ports
         ];
+    }
+
+    private function calculatePortsPerRow(int $base_ports, int $row_count): int {
+        if ($base_ports <= 0) {
+            return 1;
+        }
+
+        $row_count = max(1, min(self::MAX_ROW_COUNT, $row_count));
+        return $this->clamp((int) ceil($base_ports / $row_count), 1, self::MAX_PORTS_PER_ROW);
     }
 
     private function loadPortsFromFields(int $total_ports, int $sfp_ports, int $port_index_start, array $discovered_ports = []): array {
@@ -363,7 +402,8 @@ class WidgetView extends CControllerDashboardWidgetView {
                     'problem_color' => $this->safeColor((string) ($this->fields_values['port'.$field_index.'_problem_color'] ?? '#FB7185'), '#FB7185'),
                     'traffic_in_token' => trim((string) ($discovered_port['traffic_in_token'] ?? '')),
                     'traffic_out_token' => trim((string) ($discovered_port['traffic_out_token'] ?? '')),
-                    'speed_token' => trim((string) ($discovered_port['speed_token'] ?? ''))
+                    'speed_token' => trim((string) ($discovered_port['speed_token'] ?? '')),
+                    'status_token' => trim((string) ($discovered_port['status_token'] ?? ''))
                 ];
             }
 
@@ -511,6 +551,104 @@ class WidgetView extends CControllerDashboardWidgetView {
         return $result;
     }
 
+    private function loadActivePortProblemMeta(string $hostid, array $ports): array {
+        if ($hostid === '' || $ports === []) {
+            return [];
+        }
+
+        $rows = API::Trigger()->get([
+            'output' => ['triggerid', 'description', 'priority', 'value'],
+            'hostids' => [$hostid],
+            'filter' => ['status' => 0, 'value' => 1]
+        ]);
+
+        if (!is_array($rows) || $rows === []) {
+            return [];
+        }
+
+        $ports_by_name = [];
+        $ports_by_index = [];
+        foreach ($ports as $port) {
+            $port_index = (int) ($port['index'] ?? 0);
+            if ($port_index <= 0) {
+                continue;
+            }
+
+            $normalized_name = $this->normalizeMatchText((string) ($port['name'] ?? ''));
+            if ($normalized_name !== '') {
+                $ports_by_name[$normalized_name][] = $port;
+            }
+
+            $mapped_index = (int) ($port['mapped_index'] ?? 0);
+            if ($mapped_index > 0) {
+                $ports_by_index[$mapped_index][] = $port;
+            }
+        }
+
+        $result = [];
+        foreach ($rows as $row) {
+            $trigger_port_name = $this->extractInterfaceNameFromTriggerDescription((string) ($row['description'] ?? ''));
+            if ($trigger_port_name === '') {
+                continue;
+            }
+
+            $matched_ports = [];
+            $normalized_name = $this->normalizeMatchText($trigger_port_name);
+            if ($normalized_name !== '' && array_key_exists($normalized_name, $ports_by_name)) {
+                $matched_ports = $ports_by_name[$normalized_name];
+            }
+            else {
+                $trigger_index = $this->extractTrailingIndex($trigger_port_name);
+                if ($trigger_index > 0 && array_key_exists($trigger_index, $ports_by_index)) {
+                    $matched_ports = $ports_by_index[$trigger_index];
+                }
+            }
+
+            foreach ($matched_ports as $port) {
+                $port_index = (int) ($port['index'] ?? 0);
+                $current = $result[$port_index] ?? null;
+                $current_priority = $current !== null ? (int) ($current['priority'] ?? 0) : -1;
+                $new_priority = (int) ($row['priority'] ?? 0);
+
+                if ($current !== null && $current_priority > $new_priority) {
+                    continue;
+                }
+
+                $result[$port_index] = [
+                    'triggerid' => (string) ($row['triggerid'] ?? ''),
+                    'description' => (string) ($row['description'] ?? ''),
+                    'priority' => $new_priority
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    private function normalizeMatchText(string $value): string {
+        return preg_replace('/[^a-z0-9]+/', '', strtolower($value)) ?? '';
+    }
+
+    private function extractInterfaceNameFromTriggerDescription(string $description): string {
+        if (preg_match('/Interface\s+(.+?)\(\):/i', $description, $matches) === 1) {
+            return trim((string) $matches[1]);
+        }
+
+        if (preg_match('/Port\s+(.+?):/i', $description, $matches) === 1) {
+            return trim((string) $matches[1]);
+        }
+
+        return '';
+    }
+
+    private function extractTrailingIndex(string $value): int {
+        if (preg_match('/(\d+)(?!.*\d)/', $value, $matches) !== 1) {
+            return 0;
+        }
+
+        return (int) $matches[1];
+    }
+
     private function sanitizeItemPattern(string $value, string $fallback): string {
         $value = trim($value);
         if ($value === '') {
@@ -621,9 +759,10 @@ class WidgetView extends CControllerDashboardWidgetView {
         }
 
         $rows = API::Item()->get([
-            'output' => ['key_', 'lastvalue', 'units'],
+            'output' => ['key_', 'lastvalue', 'units', 'value_type', 'valuemapid'],
             'hostids' => [$hostid],
-            'filter' => ['key_' => $keys]
+            'filter' => ['key_' => $keys],
+            'selectValueMap' => ['mappings']
         ]);
 
         $result = [];
@@ -634,17 +773,103 @@ class WidgetView extends CControllerDashboardWidgetView {
             }
 
             $result[$key] = [
+                'raw_value' => (string) ($row['lastvalue'] ?? ''),
                 'value' => $this->toFloat($row['lastvalue'] ?? 0),
-                'units' => (string) ($row['units'] ?? '')
+                'units' => (string) ($row['units'] ?? ''),
+                'value_type' => (int) ($row['value_type'] ?? 3),
+                'mapped_value' => $this->mapItemValue($row)
             ];
         }
 
         return $result;
     }
 
+    private function mapItemValue(array $item): string {
+        $raw_value = (string) ($item['lastvalue'] ?? '');
+        if ($raw_value === '') {
+            return '';
+        }
+
+        $valuemap = $item['valuemap'] ?? [];
+        if (!is_array($valuemap) || $valuemap === []) {
+            return '';
+        }
+
+        $mapped_value = CValueMapHelper::getMappedValue((int) ($item['value_type'] ?? 3), $raw_value, $valuemap);
+        return $mapped_value !== false ? (string) $mapped_value : '';
+    }
+
+    private function normalizeInterfaceStatus($value, string $mapped_value = ''): array {
+        $mapped_value = trim($mapped_value);
+        if ($mapped_value !== '') {
+            return [
+                'value' => is_numeric((string) $value) ? (int) round($this->toFloat($value)) : null,
+                'label' => $mapped_value,
+                'is_online' => $this->inferOnlineFromMappedLabel($mapped_value)
+            ];
+        }
+
+        if ($value === null || $value === '') {
+            return [
+                'value' => null,
+                'label' => 'unknown',
+                'is_online' => null
+            ];
+        }
+
+        $status = (int) round($this->toFloat($value));
+        return match ($status) {
+            1 => ['value' => 1, 'label' => 'up', 'is_online' => true],
+            2 => ['value' => 2, 'label' => 'down', 'is_online' => false],
+            3 => ['value' => 3, 'label' => 'testing', 'is_online' => false],
+            4 => ['value' => 4, 'label' => 'unknown', 'is_online' => null],
+            5 => ['value' => 5, 'label' => 'dormant', 'is_online' => false],
+            6 => ['value' => 6, 'label' => 'not present', 'is_online' => false],
+            7 => ['value' => 7, 'label' => 'lower layer down', 'is_online' => false],
+            default => ['value' => $status, 'label' => 'unknown', 'is_online' => null]
+        };
+    }
+
+    private function inferOnlineFromMappedLabel(string $label): ?bool {
+        $normalized = strtolower(trim($label));
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (preg_match('/\b(up|online|ok|enabled|connected)\b/', $normalized) === 1) {
+            return true;
+        }
+
+        if (preg_match('/\b(down|offline|disabled|disconnected|dormant|testing|not present|lower layer down)\b/', $normalized) === 1) {
+            return false;
+        }
+
+        return null;
+    }
+
+    private function resolvePortColor(array $port): string {
+        if (!empty($port['is_problem'])) {
+            return (string) ($port['problem_color'] ?? '#FB7185');
+        }
+
+        if (array_key_exists('is_online', $port) && $port['is_online'] !== null) {
+            return $port['is_online']
+                ? (string) ($port['ok_color'] ?? '#34D399')
+                : (string) ($port['default_color'] ?? '#64748B');
+        }
+
+        if (!empty($port['has_trigger'])) {
+            return (string) ($port['ok_color'] ?? '#34D399');
+        }
+
+        return (string) ($port['default_color'] ?? '#64748B');
+    }
+
     private function buildSummary(array $layout, array $ports, array $host): array {
         $configured = 0;
-        $problems = 0;
+        $problem_ports = 0;
+        $up_ports = 0;
+        $down_ports = 0;
         $peak_utilization = 0.0;
         $hot_ports = 0;
 
@@ -652,9 +877,20 @@ class WidgetView extends CControllerDashboardWidgetView {
             if (!empty($port['has_trigger'])) {
                 $configured++;
             }
+
             if (!empty($port['is_problem'])) {
-                $problems++;
+                $problem_ports++;
             }
+
+            if (array_key_exists('is_online', $port) && $port['is_online'] !== null) {
+                if ($port['is_online']) {
+                    $up_ports++;
+                }
+                else {
+                    $down_ports++;
+                }
+            }
+
             if (isset($port['utilization_percent']) && $port['utilization_percent'] !== null) {
                 $utilization = (float) $port['utilization_percent'];
                 if ($utilization > $peak_utilization) {
@@ -667,12 +903,13 @@ class WidgetView extends CControllerDashboardWidgetView {
         }
 
         $total = (int) ($layout['total_ports'] ?? 0);
-        $healthy = max(0, $configured - $problems);
 
         return [
             'configured_ports' => $configured,
-            'problem_ports' => $problems,
-            'healthy_ports' => $healthy,
+            'problem_ports' => $problem_ports,
+            'healthy_ports' => $up_ports,
+            'up_ports' => $up_ports,
+            'down_ports' => $down_ports,
             'total_ports' => $total,
             'peak_utilization' => round($peak_utilization, 1),
             'hot_ports' => $hot_ports,

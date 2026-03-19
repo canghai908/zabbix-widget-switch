@@ -132,10 +132,13 @@
             return currentPorts.length;
         }
 
+        if (currentLayout && Number.isInteger(currentLayout.total_ports) && currentLayout.total_ports > 0) {
+            return currentLayout.total_ports;
+        }
+
         const rows = Math.max(1, readInt('row_count', 2));
         const perRow = Math.max(1, readInt('ports_per_row', 12));
-        const sfp = Math.max(0, readInt('sfp_ports', 4));
-        return Math.min(96, rows * perRow + sfp);
+        return Math.min(96, rows * perRow);
     }
 
     function getPortFieldsets() {
@@ -145,7 +148,11 @@
     function applyPortVisibility() {
         const total = getPortTotal();
         const discoveredSfp = currentPorts.filter((port) => !!port.is_sfp).length;
-        const sfpCount = discoveredSfp > 0 ? discoveredSfp : Math.max(0, readInt('sfp_ports', 4));
+        const sfpCount = discoveredSfp > 0
+            ? discoveredSfp
+            : currentLayout && Number.isInteger(currentLayout.sfp_ports)
+                ? currentLayout.sfp_ports
+                : 0;
         const sfpStart = total - sfpCount + 1;
 
         for (const fieldset of getPortFieldsets()) {
@@ -384,9 +391,11 @@
     function getDiscoveryKey(hostId) {
         return [
             hostId,
+            readInt('row_count', 2),
             readPattern('traffic_in_item_pattern'),
             readPattern('traffic_out_item_pattern'),
-            readPattern('speed_item_pattern')
+            readPattern('speed_item_pattern'),
+            readPattern('status_item_pattern')
         ].join('|');
     }
 
@@ -424,9 +433,11 @@
         url.searchParams.set('action', 'widget.switchpanel.triggers');
         url.searchParams.set('output', 'ajax');
         url.searchParams.set('hostid', hostId);
+        url.searchParams.set('row_count', readInt('row_count', 2));
         url.searchParams.set('traffic_in_item_pattern', readPattern('traffic_in_item_pattern'));
         url.searchParams.set('traffic_out_item_pattern', readPattern('traffic_out_item_pattern'));
         url.searchParams.set('speed_item_pattern', readPattern('speed_item_pattern'));
+        url.searchParams.set('status_item_pattern', readPattern('status_item_pattern'));
 
         return fetch(url.toString(), {
             credentials: 'same-origin',
@@ -448,6 +459,7 @@
     }
 
     function refresh() {
+        setRowVisible('ports_per_row', false);
         applyPortVisibility();
         applyColorInputs();
 
@@ -480,6 +492,9 @@
                 currentTriggers = Array.isArray(payload.triggers) ? payload.triggers : [];
                 currentPorts = Array.isArray(payload.ports) ? payload.ports : [];
                 currentLayout = payload.layout || null;
+                if (currentLayout && Number.isInteger(currentLayout.ports_per_row)) {
+                    writeValue('ports_per_row', currentLayout.ports_per_row);
+                }
                 currentRecommendedItems = payload.recommended_items || {};
                 applyRecommendedMetadataItems();
                 applyDiscoveredTriggerDefaults();

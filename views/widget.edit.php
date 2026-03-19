@@ -15,15 +15,13 @@ $form->addFieldsGroup(getMetadataFieldsGroupView($data['fields'], 'switch_brand'
 $form->addFieldsGroup(getMetadataFieldsGroupView($data['fields'], 'switch_model', _('Model'), $selected_hostid));
 $form->addFieldsGroup(getMetadataFieldsGroupView($data['fields'], 'switch_role', _('Role label'), $selected_hostid));
 $form->addField(new CWidgetFieldTextBoxView($data['fields']['row_count']));
-$form->addField(new CWidgetFieldTextBoxView($data['fields']['ports_per_row']));
-$form->addField(new CWidgetFieldTextBoxView($data['fields']['sfp_ports']));
 $form->addField(new CWidgetFieldTextBoxView($data['fields']['traffic_in_item_pattern']));
 $form->addField(new CWidgetFieldTextBoxView($data['fields']['traffic_out_item_pattern']));
 $form->addField(new CWidgetFieldTextBoxView($data['fields']['speed_item_pattern']));
+$form->addField(new CWidgetFieldTextBoxView($data['fields']['status_item_pattern']));
 $form->addField(new CWidgetFieldTextBoxView($data['fields']['port_index_start']));
 $form->addField(new CWidgetFieldSelectView($data['fields']['visual_theme']));
 $form->addField(new CWidgetFieldSelectView($data['fields']['card_language']));
-$form->addField(new CWidgetFieldSelectView($data['fields']['utilization_overlay_enabled']));
 $form->addField(new CWidgetFieldSelectView($data['fields']['panel_scale']));
 
 for ($i = 1; $i <= $port_count; $i++) {

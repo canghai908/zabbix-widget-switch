@@ -19,10 +19,10 @@ class WidgetForm extends CWidgetForm {
     private const THEME_EMBER = 2;
     private const DEFAULT_ROW_COUNT = 2;
     private const DEFAULT_PORTS_PER_ROW = 12;
-    private const DEFAULT_SFP_PORTS = 4;
     private const DEFAULT_TRAFFIC_IN_PATTERN = 'net.if.in[*]';
     private const DEFAULT_TRAFFIC_OUT_PATTERN = 'net.if.out[*]';
     private const DEFAULT_SPEED_PATTERN = 'net.if.speed[*]';
+    private const DEFAULT_STATUS_PATTERN = 'net.if.status[*]';
     private const DEFAULT_PORT_INDEX_START = 1;
     private const MAX_ROW_COUNT = 6;
     private const MAX_PORTS_PER_ROW = 24;
@@ -82,14 +82,6 @@ class WidgetForm extends CWidgetForm {
                 ->setDefault((string) self::DEFAULT_ROW_COUNT)
         );
         $this->addField(
-            (new CWidgetFieldTextBox('ports_per_row', _('Ports per row')))
-                ->setDefault((string) self::DEFAULT_PORTS_PER_ROW)
-        );
-        $this->addField(
-            (new CWidgetFieldTextBox('sfp_ports', _('SFP ports')))
-                ->setDefault((string) self::DEFAULT_SFP_PORTS)
-        );
-        $this->addField(
             (new CWidgetFieldTextBox('traffic_in_item_pattern', _('Traffic in item pattern')))
                 ->setDefault(self::DEFAULT_TRAFFIC_IN_PATTERN)
         );
@@ -100,6 +92,10 @@ class WidgetForm extends CWidgetForm {
         $this->addField(
             (new CWidgetFieldTextBox('speed_item_pattern', _('Speed item pattern')))
                 ->setDefault(self::DEFAULT_SPEED_PATTERN)
+        );
+        $this->addField(
+            (new CWidgetFieldTextBox('status_item_pattern', _('Status item pattern')))
+                ->setDefault(self::DEFAULT_STATUS_PATTERN)
         );
         $this->addField(
             (new CWidgetFieldTextBox('port_index_start', _('Port index start')))
@@ -119,12 +115,6 @@ class WidgetForm extends CWidgetForm {
                 self::CARD_LANGUAGE_ZH_CN => _('Chinese'),
                 self::CARD_LANGUAGE_EN_US => _('English')
             ]))->setDefault(self::CARD_LANGUAGE_AUTO)
-        );
-        $this->addField(
-            (new CWidgetFieldSelect('utilization_overlay_enabled', _('Telemetry overlay'), [
-                1 => _('Enabled'),
-                0 => _('Disabled')
-            ]))->setDefault(1)
         );
         $this->addField(
             (new CWidgetFieldSelect('panel_scale', _('Panel size'), [
