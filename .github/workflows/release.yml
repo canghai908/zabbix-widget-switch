@@ -1,0 +1,51 @@
+name: Release Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare metadata
+        id: meta
+        run: |
+          TAG_NAME="${GITHUB_REF_NAME}"
+          VERSION="${TAG_NAME#v}"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release packages
+        run: |
+          set -eu
+          VERSION="${{ steps.meta.outputs.version }}"
+          PACKAGE_ROOT="dist/switchpanel"
+          mkdir -p "$PACKAGE_ROOT"
+
+          rsync -a ./ "$PACKAGE_ROOT" \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'AGENTS.md' \
+            --exclude 'dist'
+
+          cd dist
+          zip -r "switchpanel-${VERSION}.zip" switchpanel >/dev/null
+          tar -czf "switchpanel-${VERSION}.tar.gz" switchpanel
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag_name }}
+          generate_release_notes: true
+          files: |
+            dist/switchpanel-${{ steps.meta.outputs.version }}.zip
+            dist/switchpanel-${{ steps.meta.outputs.version }}.tar.gz

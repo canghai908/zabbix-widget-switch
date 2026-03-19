@@ -2,13 +2,12 @@
 
 A Zabbix 7.x dashboard widget for rendering switch ports with interface status, traffic, and trigger state.
 
-## Reference
+- Chinese guide: [`README.zh-CN.md`](README.zh-CN.md)
+- Reference project: [OpensourceICTSolutions/zabbix-widget-switch](https://github.com/OpensourceICTSolutions/zabbix-widget-switch)
 
-This project references and borrows design ideas from:
+## Screenshots
 
-- [OpensourceICTSolutions/zabbix-widget-switch](https://github.com/OpensourceICTSolutions/zabbix-widget-switch)
-
-This repository is a customized implementation for our own usage and layout needs.
+Screenshots can be added later under `assets/screenshots/`.
 
 ## Features
 
@@ -18,7 +17,7 @@ This repository is a customized implementation for our own usage and layout need
 - Support interface traffic, speed, and status item patterns
 - Support interface value map display for status text
 - Support host-scoped Brand, Model, and Role item selection
-- Support Chinese/English card text selection
+- Support Chinese and English card text selection
 
 ## Install
 
@@ -31,6 +30,14 @@ This repository is a customized implementation for our own usage and layout need
    - `Traffic out item pattern`
    - `Speed item pattern`
    - `Status item pattern`
+
+## Release workflow
+
+GitHub Actions is configured in `.github/workflows/release.yml`.
+
+- Push a tag like `v0.0.1`
+- GitHub Actions builds `zip` and `tar.gz` release packages
+- The workflow publishes them to GitHub Releases automatically
 
 ## Deploy test script
 
@@ -56,5 +63,5 @@ DEPLOY_TARGET_GROUP='zabbix' \
 
 ## Notes
 
-- The module author is `canghai809`.
-- Current module version is `0.0.1`.
+- Author: `canghai809`
+- Version: `0.0.1`
