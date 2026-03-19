@@ -4,16 +4,25 @@ namespace Modules\SwitchPanelWidget\Includes;
 
 use Zabbix\Widgets\CWidgetForm;
 use Zabbix\Widgets\Fields\CWidgetFieldMultiSelectHost;
+use Zabbix\Widgets\Fields\CWidgetFieldMultiSelectItem;
 use Zabbix\Widgets\Fields\CWidgetFieldSelect;
 use Zabbix\Widgets\Fields\CWidgetFieldTextBox;
 
 class WidgetForm extends CWidgetForm {
+    private const SOURCE_MANUAL = 0;
+    private const SOURCE_ITEM = 1;
+    private const CARD_LANGUAGE_AUTO = 0;
+    private const CARD_LANGUAGE_ZH_CN = 1;
+    private const CARD_LANGUAGE_EN_US = 2;
+    private const THEME_GRAPHITE = 0;
+    private const THEME_AURORA = 1;
+    private const THEME_EMBER = 2;
     private const DEFAULT_ROW_COUNT = 2;
     private const DEFAULT_PORTS_PER_ROW = 12;
     private const DEFAULT_SFP_PORTS = 4;
-    private const DEFAULT_TRAFFIC_IN_PATTERN = 'ifInOctets[*]';
-    private const DEFAULT_TRAFFIC_OUT_PATTERN = 'ifOutOctets[*]';
-    private const DEFAULT_SPEED_PATTERN = 'ifHighSpeed[*]';
+    private const DEFAULT_TRAFFIC_IN_PATTERN = 'net.if.in[*]';
+    private const DEFAULT_TRAFFIC_OUT_PATTERN = 'net.if.out[*]';
+    private const DEFAULT_SPEED_PATTERN = 'net.if.speed[*]';
     private const DEFAULT_PORT_INDEX_START = 1;
     private const MAX_ROW_COUNT = 6;
     private const MAX_PORTS_PER_ROW = 24;
@@ -26,16 +35,46 @@ class WidgetForm extends CWidgetForm {
         );
 
         $this->addField(
+            (new CWidgetFieldSelect('switch_brand_source', _('Brand source'), [
+                self::SOURCE_MANUAL => _('Manual text'),
+                self::SOURCE_ITEM => _('Item value')
+            ]))->setDefault(self::SOURCE_MANUAL)
+        );
+        $this->addField(
             (new CWidgetFieldTextBox('switch_brand', _('Brand')))
                 ->setDefault('EDGECORE')
+        );
+        $this->addField(
+            (new CWidgetFieldMultiSelectItem('switch_brand_itemids', _('Brand item')))
+                ->setMultiple(false)
+        );
+        $this->addField(
+            (new CWidgetFieldSelect('switch_model_source', _('Model source'), [
+                self::SOURCE_MANUAL => _('Manual text'),
+                self::SOURCE_ITEM => _('Item value')
+            ]))->setDefault(self::SOURCE_MANUAL)
         );
         $this->addField(
             (new CWidgetFieldTextBox('switch_model', _('Model')))
                 ->setDefault('S5850-48T4Q')
         );
         $this->addField(
+            (new CWidgetFieldMultiSelectItem('switch_model_itemids', _('Model item')))
+                ->setMultiple(false)
+        );
+        $this->addField(
             (new CWidgetFieldTextBox('switch_role', _('Role label')))
                 ->setDefault('Campus Aggregation')
+        );
+        $this->addField(
+            (new CWidgetFieldSelect('switch_role_source', _('Role source'), [
+                self::SOURCE_MANUAL => _('Manual text'),
+                self::SOURCE_ITEM => _('Item value')
+            ]))->setDefault(self::SOURCE_MANUAL)
+        );
+        $this->addField(
+            (new CWidgetFieldMultiSelectItem('switch_role_itemids', _('Role item')))
+                ->setMultiple(false)
         );
 
         $this->addField(
@@ -69,10 +108,17 @@ class WidgetForm extends CWidgetForm {
 
         $this->addField(
             (new CWidgetFieldSelect('visual_theme', _('Theme'), [
-                'graphite' => _('Graphite'),
-                'aurora' => _('Aurora'),
-                'ember' => _('Ember')
-            ]))->setDefault('graphite')
+                self::THEME_GRAPHITE => _('Graphite'),
+                self::THEME_AURORA => _('Aurora'),
+                self::THEME_EMBER => _('Ember')
+            ]))->setDefault(self::THEME_GRAPHITE)
+        );
+        $this->addField(
+            (new CWidgetFieldSelect('card_language', _('Card language'), [
+                self::CARD_LANGUAGE_AUTO => _('Follow Zabbix'),
+                self::CARD_LANGUAGE_ZH_CN => _('Chinese'),
+                self::CARD_LANGUAGE_EN_US => _('English')
+            ]))->setDefault(self::CARD_LANGUAGE_AUTO)
         );
         $this->addField(
             (new CWidgetFieldSelect('utilization_overlay_enabled', _('Telemetry overlay'), [

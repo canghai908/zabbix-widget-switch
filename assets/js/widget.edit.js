@@ -1,12 +1,86 @@
 (function() {
     const SELECTOR_INTERVAL = 1200;
     let currentHostId = '';
+    let currentDiscoveryKey = '';
     let currentTriggers = [];
+    let currentPorts = [];
+    let currentLayout = null;
+    let currentRecommendedItems = {};
 
     function findField(name) {
         return document.querySelector(`[name="fields[${name}]"]`)
+            || document.querySelector(`[name="fields[${name}][]"]`)
             || document.querySelector(`[name="${name}"]`)
+            || document.getElementById(`${name}_ms`)
             || document.getElementById(name);
+    }
+
+    function closestFieldRow(field) {
+        if (!field) {
+            return null;
+        }
+
+        return field.closest('.form_row')
+            || field.closest('.fields-group')
+            || field.closest('li')
+            || field.closest('tr')
+            || field.parentElement;
+    }
+
+    function ensureInlineMetadataStyles() {
+        if (document.getElementById('switchpanel-inline-metadata-style')) {
+            return;
+        }
+
+        const style = document.createElement('style');
+        style.id = 'switchpanel-inline-metadata-style';
+        style.textContent = `
+            .switchpanel-meta-group.fields-group {
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+            .switchpanel-meta-group .switchpanel-meta-source {
+                flex: 0 0 132px;
+                min-width: 132px;
+            }
+            .switchpanel-meta-group .switchpanel-meta-manual,
+            .switchpanel-meta-group .switchpanel-meta-item {
+                flex: 1 1 270px;
+                min-width: 270px;
+            }
+            .switchpanel-meta-group .switchpanel-meta-source select,
+            .switchpanel-meta-group .switchpanel-meta-manual input[type="text"],
+            .switchpanel-meta-group .switchpanel-meta-item .multiselect-control {
+                max-width: 100%;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function getFieldContainer(fieldName) {
+        const field = findField(fieldName);
+        if (!field) {
+            return null;
+        }
+
+        return field.closest('.switchpanel-inline-control')
+            || field.closest('.form-field')
+            || closestFieldRow(field);
+    }
+
+    function setFieldVisible(fieldName, visible) {
+        const container = getFieldContainer(fieldName);
+        if (container) {
+            container.style.display = visible ? '' : 'none';
+        }
+    }
+
+    function setRowVisible(fieldName, visible) {
+        const row = closestFieldRow(findField(fieldName));
+        if (row) {
+            row.style.display = visible ? '' : 'none';
+        }
     }
 
     function readInt(name, fallback) {
@@ -54,6 +128,10 @@
     }
 
     function getPortTotal() {
+        if (currentPorts.length > 0) {
+            return currentPorts.length;
+        }
+
         const rows = Math.max(1, readInt('row_count', 2));
         const perRow = Math.max(1, readInt('ports_per_row', 12));
         const sfp = Math.max(0, readInt('sfp_ports', 4));
@@ -66,7 +144,9 @@
 
     function applyPortVisibility() {
         const total = getPortTotal();
-        const sfpStart = total - Math.max(0, readInt('sfp_ports', 4)) + 1;
+        const discoveredSfp = currentPorts.filter((port) => !!port.is_sfp).length;
+        const sfpCount = discoveredSfp > 0 ? discoveredSfp : Math.max(0, readInt('sfp_ports', 4));
+        const sfpStart = total - sfpCount + 1;
 
         for (const fieldset of getPortFieldsets()) {
             const index = parseInt(fieldset.dataset.portIndex || '0', 10);
@@ -75,10 +155,16 @@
 
             const nameField = findField(`port${index}_name`);
             if (nameField) {
-                const isSfp = index >= sfpStart;
-                nameField.placeholder = isSfp
-                    ? `SFP ${String(index - sfpStart + 1).padStart(2, '0')}`
-                    : `GE ${String(index).padStart(2, '0')}`;
+                const portInfo = currentPorts[index - 1] || null;
+                if (portInfo && portInfo.name) {
+                    nameField.placeholder = portInfo.name;
+                }
+                else {
+                    const isSfp = index >= sfpStart;
+                    nameField.placeholder = isSfp
+                        ? `SFP ${String(index - sfpStart + 1).padStart(2, '0')}`
+                        : `GE ${String(index).padStart(2, '0')}`;
+                }
             }
         }
     }
@@ -177,15 +263,160 @@
     function parseTriggerPayload(text) {
         const payload = JSON.parse(text);
         if (Array.isArray(payload.triggers)) {
-            return payload;
+            return {
+                triggers: payload.triggers,
+                ports: Array.isArray(payload.ports) ? payload.ports : [],
+                layout: payload.layout || null,
+                recommended_items: payload.recommended_items || {}
+            };
         }
         if (payload.main_block) {
             const nested = JSON.parse(payload.main_block);
             if (Array.isArray(nested.triggers)) {
-                return nested;
+                return {
+                    triggers: nested.triggers,
+                    ports: Array.isArray(nested.ports) ? nested.ports : [],
+                    layout: nested.layout || null,
+                    recommended_items: nested.recommended_items || {}
+                };
             }
         }
-        return {triggers: []};
+        return {triggers: [], ports: [], layout: null, recommended_items: {}};
+    }
+
+    function readPattern(name) {
+        const field = findField(name);
+        return field ? String(field.value || '').trim() : '';
+    }
+
+    function readSelectInt(name, fallback) {
+        const field = findField(name);
+        const value = field ? String(field.value || '').trim() : '';
+        return /^\d+$/.test(value) ? parseInt(value, 10) : fallback;
+    }
+
+    function syncTextSource(prefix) {
+        const source = readSelectInt(`${prefix}_source`, 0);
+        const useItem = source === 1;
+        setFieldVisible(prefix, !useItem);
+        setFieldVisible(`${prefix}_itemids`, useItem);
+    }
+
+    function syncMetadataSourceFields() {
+        syncTextSource('switch_brand');
+        syncTextSource('switch_model');
+        syncTextSource('switch_role');
+    }
+
+    function updateItemPopupHost(prefix, hostId) {
+        const multiselect = document.getElementById(`${prefix}_itemids_ms`);
+        if (!multiselect || typeof jQuery === 'undefined') {
+            return;
+        }
+
+        const widget = jQuery(multiselect).data('multiSelect');
+        if (!widget || !widget.options || !widget.options.popup || !widget.options.popup.parameters) {
+            return;
+        }
+
+        widget.options.popup.parameters.hostid = hostId || 0;
+        widget.options.popup.parameters.hide_host_filter = hostId !== '' ? 1 : 0;
+    }
+
+    function getMultiSelectData(fieldName) {
+        const multiselect = document.getElementById(`${fieldName}_ms`);
+        if (!multiselect || typeof jQuery === 'undefined') {
+            return [];
+        }
+
+        const $multiselect = jQuery(multiselect);
+        return typeof $multiselect.multiSelect === 'function'
+            ? $multiselect.multiSelect('getData')
+            : [];
+    }
+
+    function setRecommendedItem(fieldName, item) {
+        if (!item || !item.id || typeof jQuery === 'undefined') {
+            return;
+        }
+
+        const multiselect = document.getElementById(`${fieldName}_ms`);
+        if (!multiselect) {
+            return;
+        }
+
+        const $multiselect = jQuery(multiselect);
+        if (typeof $multiselect.multiSelect !== 'function') {
+            return;
+        }
+
+        const existing = $multiselect.multiSelect('getData');
+        if (Array.isArray(existing) && existing.length > 0) {
+            return;
+        }
+
+        $multiselect.multiSelect('addData', [{
+            id: String(item.id),
+            name: String(item.name || item.id)
+        }]);
+    }
+
+    function applyRecommendedMetadataItems() {
+        const mapping = [
+            ['switch_brand', 'switch_brand_itemids'],
+            ['switch_model', 'switch_model_itemids'],
+            ['switch_role', 'switch_role_itemids']
+        ];
+
+        for (const [prefix, fieldName] of mapping) {
+            if (readSelectInt(`${prefix}_source`, 0) !== 1) {
+                continue;
+            }
+
+            if (getMultiSelectData(fieldName).length > 0) {
+                continue;
+            }
+
+            setRecommendedItem(fieldName, currentRecommendedItems[fieldName] || null);
+        }
+    }
+
+    function getDiscoveryKey(hostId) {
+        return [
+            hostId,
+            readPattern('traffic_in_item_pattern'),
+            readPattern('traffic_out_item_pattern'),
+            readPattern('speed_item_pattern')
+        ].join('|');
+    }
+
+    function writeValue(name, value) {
+        const field = findField(name);
+        if (!field) {
+            return;
+        }
+
+        field.value = String(value);
+        field.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+
+    function applyDiscoveredTriggerDefaults() {
+        for (const input of getTriggerInputs()) {
+            const match = `${input.name || ''} ${input.id || ''}`.match(/port(\d+)_triggerid/);
+            if (!match) {
+                continue;
+            }
+
+            const portIndex = parseInt(match[1], 10);
+            const portInfo = currentPorts[portIndex - 1] || null;
+            input.value = portInfo && portInfo.default_triggerid
+                ? String(portInfo.default_triggerid)
+                : '';
+
+            if (input._switchpanelSelect) {
+                input._switchpanelSelect.dataset.initialValue = input.value;
+            }
+        }
     }
 
     function fetchTriggers(hostId) {
@@ -193,6 +424,9 @@
         url.searchParams.set('action', 'widget.switchpanel.triggers');
         url.searchParams.set('output', 'ajax');
         url.searchParams.set('hostid', hostId);
+        url.searchParams.set('traffic_in_item_pattern', readPattern('traffic_in_item_pattern'));
+        url.searchParams.set('traffic_out_item_pattern', readPattern('traffic_out_item_pattern'));
+        url.searchParams.set('speed_item_pattern', readPattern('speed_item_pattern'));
 
         return fetch(url.toString(), {
             credentials: 'same-origin',
@@ -218,14 +452,25 @@
         applyColorInputs();
 
         const hostId = getHostId();
-        if (hostId === currentHostId) {
+        const discoveryKey = hostId === '' ? '' : getDiscoveryKey(hostId);
+        ensureInlineMetadataStyles();
+        syncMetadataSourceFields();
+        updateItemPopupHost('switch_brand', hostId);
+        updateItemPopupHost('switch_model', hostId);
+        updateItemPopupHost('switch_role', hostId);
+
+        if (hostId === currentHostId && discoveryKey === currentDiscoveryKey) {
             applyTriggerOptions();
             return;
         }
 
         currentHostId = hostId;
+        currentDiscoveryKey = discoveryKey;
         if (hostId === '') {
             currentTriggers = [];
+            currentPorts = [];
+            currentLayout = null;
+            currentRecommendedItems = {};
             applyTriggerOptions();
             return;
         }
@@ -233,10 +478,19 @@
         fetchTriggers(hostId)
             .then((payload) => {
                 currentTriggers = Array.isArray(payload.triggers) ? payload.triggers : [];
+                currentPorts = Array.isArray(payload.ports) ? payload.ports : [];
+                currentLayout = payload.layout || null;
+                currentRecommendedItems = payload.recommended_items || {};
+                applyRecommendedMetadataItems();
+                applyDiscoveredTriggerDefaults();
+                applyPortVisibility();
                 applyTriggerOptions();
             })
             .catch(() => {
                 currentTriggers = [];
+                currentPorts = [];
+                currentLayout = null;
+                currentRecommendedItems = {};
                 applyTriggerOptions();
             });
     }

@@ -5,14 +5,24 @@ namespace Modules\SwitchPanelWidget\Actions;
 use API;
 use CControllerDashboardWidgetView;
 use CControllerResponseData;
+use CWebUser;
+use Modules\SwitchPanelWidget\Includes\PortDiscovery;
 
 class WidgetView extends CControllerDashboardWidgetView {
+    private const SOURCE_MANUAL = 0;
+    private const SOURCE_ITEM = 1;
+    private const CARD_LANGUAGE_AUTO = 0;
+    private const CARD_LANGUAGE_ZH_CN = 1;
+    private const CARD_LANGUAGE_EN_US = 2;
+    private const THEME_GRAPHITE = 0;
+    private const THEME_AURORA = 1;
+    private const THEME_EMBER = 2;
     private const DEFAULT_ROW_COUNT = 2;
     private const DEFAULT_PORTS_PER_ROW = 12;
     private const DEFAULT_SFP_PORTS = 4;
-    private const DEFAULT_TRAFFIC_IN_PATTERN = 'ifInOctets[*]';
-    private const DEFAULT_TRAFFIC_OUT_PATTERN = 'ifOutOctets[*]';
-    private const DEFAULT_SPEED_PATTERN = 'ifHighSpeed[*]';
+    private const DEFAULT_TRAFFIC_IN_PATTERN = 'net.if.in[*]';
+    private const DEFAULT_TRAFFIC_OUT_PATTERN = 'net.if.out[*]';
+    private const DEFAULT_SPEED_PATTERN = 'net.if.speed[*]';
     private const DEFAULT_PORT_INDEX_START = 1;
     private const TRAFFIC_LOOKBACK_SECONDS = 1800;
     private const TRAFFIC_POINTS = 18;
@@ -21,13 +31,33 @@ class WidgetView extends CControllerDashboardWidgetView {
     private const MAX_TOTAL_PORTS = 96;
 
     protected function doAction(): void {
-        $layout = $this->getLayout();
         $hostid = $this->extractHostId();
         $host = $this->loadHostMeta($hostid);
         $widget_name = $this->resolveWidgetName();
-        $switch_brand = $this->resolveText('switch_brand', (string) ($host['vendor'] ?? ''), 'EDGECORE');
-        $switch_model = $this->resolveText('switch_model', (string) ($host['model'] ?? ''), 'S5850-48T4Q');
-        $switch_role = $this->resolveText('switch_role', '', 'Campus Aggregation');
+        $item_texts = $this->loadSelectedItemTexts([
+            'switch_brand_itemids' => $this->extractFirstId('switch_brand_itemids'),
+            'switch_model_itemids' => $this->extractFirstId('switch_model_itemids'),
+            'switch_role_itemids' => $this->extractFirstId('switch_role_itemids')
+        ]);
+        $switch_brand = $this->resolveTextSource(
+            'switch_brand',
+            (string) ($item_texts['switch_brand_itemids'] ?? ''),
+            (string) ($host['vendor'] ?? ''),
+            'EDGECORE'
+        );
+        $switch_model = $this->resolveTextSource(
+            'switch_model',
+            (string) ($item_texts['switch_model_itemids'] ?? ''),
+            (string) ($host['model'] ?? ''),
+            'S5850-48T4Q'
+        );
+        $switch_role = $this->resolveTextSource(
+            'switch_role',
+            (string) ($item_texts['switch_role_itemids'] ?? ''),
+            '',
+            'Campus Aggregation'
+        );
+        $card_language_mode = (int) ($this->fields_values['card_language'] ?? self::CARD_LANGUAGE_AUTO);
         $visual_theme = $this->resolveTheme();
         $panel_scale = $this->clamp($this->extractPositiveInt($this->fields_values['panel_scale'] ?? 92), 84, 100);
         $utilization_overlay_enabled = ((int) ($this->fields_values['utilization_overlay_enabled'] ?? 1)) === 1;
@@ -48,7 +78,13 @@ class WidgetView extends CControllerDashboardWidgetView {
             $port_index_start = self::DEFAULT_PORT_INDEX_START;
         }
 
-        $ports = $this->loadPortsFromFields($layout['total_ports'], $layout['sfp_ports'], $port_index_start);
+        $discovery = PortDiscovery::discover($hostid, [
+            'traffic_in' => $traffic_in_pattern,
+            'traffic_out' => $traffic_out_pattern,
+            'speed' => $speed_pattern
+        ]);
+        $layout = $this->getLayout($discovery['ports'] ?? []);
+        $ports = $this->loadPortsFromFields($layout['total_ports'], $layout['sfp_ports'], $port_index_start, $discovery['ports'] ?? []);
 
         if ($hostid !== '' && !$this->hasHostAccess($hostid)) {
             $this->setResponse(new CControllerResponseData([
@@ -59,6 +95,8 @@ class WidgetView extends CControllerDashboardWidgetView {
                 'switch_brand' => $switch_brand,
                 'switch_model' => $switch_model,
                 'switch_role' => $switch_role,
+                'card_language_mode' => $card_language_mode,
+                'user_lang' => CWebUser::getLang(),
                 'visual_theme' => $visual_theme,
                 'panel_scale' => $panel_scale,
                 'utilization_overlay_enabled' => $utilization_overlay_enabled,
@@ -74,9 +112,21 @@ class WidgetView extends CControllerDashboardWidgetView {
         }
 
         foreach ($ports as &$port) {
-            $port['traffic_in_item_key'] = $this->resolvePortItemKey($traffic_in_pattern, (int) $port['mapped_index']);
-            $port['traffic_out_item_key'] = $this->resolvePortItemKey($traffic_out_pattern, (int) $port['mapped_index']);
-            $port['speed_item_key'] = $this->resolvePortItemKey($speed_pattern, (int) $port['mapped_index']);
+            $port['traffic_in_item_key'] = $this->resolvePortItemKey(
+                $traffic_in_pattern,
+                (int) $port['mapped_index'],
+                (string) ($port['traffic_in_token'] ?? '')
+            );
+            $port['traffic_out_item_key'] = $this->resolvePortItemKey(
+                $traffic_out_pattern,
+                (int) $port['mapped_index'],
+                (string) ($port['traffic_out_token'] ?? '')
+            );
+            $port['speed_item_key'] = $this->resolvePortItemKey(
+                $speed_pattern,
+                (int) $port['mapped_index'],
+                (string) ($port['speed_token'] ?? '')
+            );
         }
         unset($port);
 
@@ -116,7 +166,12 @@ class WidgetView extends CControllerDashboardWidgetView {
                 : 0.0;
 
             $speed_key = (string) ($port['speed_item_key'] ?? '');
-            $speed_bps = $this->toSpeedBps((float) ($speed_values[$speed_key] ?? 0.0), $speed_key);
+            $speed_meta = $speed_values[$speed_key] ?? ['value' => 0.0, 'units' => ''];
+            $speed_bps = $this->toSpeedBps(
+                (float) ($speed_meta['value'] ?? 0.0),
+                $speed_key,
+                (string) ($speed_meta['units'] ?? '')
+            );
             $port['speed_bps'] = $speed_bps;
             $peak_traffic_bps = max((float) $port['traffic_in_bps'], (float) $port['traffic_out_bps']);
             $port['utilization_percent'] = $speed_bps > 0.0 ? min(100.0, ($peak_traffic_bps / $speed_bps) * 100.0) : null;
@@ -132,6 +187,8 @@ class WidgetView extends CControllerDashboardWidgetView {
             'switch_brand' => $switch_brand,
             'switch_model' => $switch_model,
             'switch_role' => $switch_role,
+            'card_language_mode' => $card_language_mode,
+            'user_lang' => CWebUser::getLang(),
             'visual_theme' => $visual_theme,
             'panel_scale' => $panel_scale,
             'utilization_overlay_enabled' => $utilization_overlay_enabled,
@@ -160,7 +217,17 @@ class WidgetView extends CControllerDashboardWidgetView {
     }
 
     private function resolveTheme(): string {
-        $theme = strtolower(trim((string) ($this->fields_values['visual_theme'] ?? 'graphite')));
+        $theme = $this->fields_values['visual_theme'] ?? self::THEME_GRAPHITE;
+
+        if (is_numeric($theme)) {
+            return match ((int) $theme) {
+                self::THEME_AURORA => 'aurora',
+                self::THEME_EMBER => 'ember',
+                default => 'graphite'
+            };
+        }
+
+        $theme = strtolower(trim((string) $theme));
         return in_array($theme, ['graphite', 'aurora', 'ember'], true) ? $theme : 'graphite';
     }
 
@@ -175,17 +242,61 @@ class WidgetView extends CControllerDashboardWidgetView {
         return $fallback;
     }
 
+    private function resolveTextSource(string $field, string $item_value, string $preferred, string $fallback): string {
+        $source = (int) ($this->fields_values[$field.'_source'] ?? self::SOURCE_MANUAL);
+
+        if ($source === self::SOURCE_ITEM) {
+            $value = trim($item_value);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return $this->resolveText($field, $preferred, $fallback);
+    }
+
     private function extractHostId(): string {
-        $value = $this->fields_values['hostids'] ?? [];
+        return $this->extractFirstId('hostids');
+    }
+
+    private function extractFirstId(string $field): string {
+        $value = $this->fields_values[$field] ?? [];
         if (is_array($value)) {
             $first = reset($value);
-            return $first !== false ? (string) $first : '';
+            return $first !== false ? trim((string) $first) : '';
         }
 
         return is_scalar($value) ? trim((string) $value) : '';
     }
 
-    private function getLayout(): array {
+    private function getLayout(array $discovered_ports = []): array {
+        if ($discovered_ports !== []) {
+            $visible_ports = array_slice($discovered_ports, 0, self::MAX_TOTAL_PORTS);
+            $total_ports = count($visible_ports);
+            $sfp_ports = count(array_filter($visible_ports, static fn(array $port): bool => !empty($port['is_sfp'])));
+            $base_ports = max(0, $total_ports - $sfp_ports);
+            $ports_per_row = $this->clamp(
+                $this->extractPositiveInt($this->fields_values['ports_per_row'] ?? self::DEFAULT_PORTS_PER_ROW),
+                1,
+                self::MAX_PORTS_PER_ROW
+            );
+            $requested_row_count = $this->clamp(
+                $this->extractPositiveInt($this->fields_values['row_count'] ?? self::DEFAULT_ROW_COUNT),
+                1,
+                self::MAX_ROW_COUNT
+            );
+            $required_row_count = $base_ports > 0 ? (int) ceil($base_ports / $ports_per_row) : 1;
+            $row_count = max($requested_row_count, $required_row_count);
+
+            return [
+                'row_count' => $row_count,
+                'ports_per_row' => $ports_per_row,
+                'sfp_ports' => $sfp_ports,
+                'total_ports' => $total_ports,
+                'base_ports' => $base_ports
+            ];
+        }
+
         $row_count = $this->clamp(
             $this->extractPositiveInt($this->fields_values['row_count'] ?? self::DEFAULT_ROW_COUNT),
             1,
@@ -213,7 +324,52 @@ class WidgetView extends CControllerDashboardWidgetView {
         ];
     }
 
-    private function loadPortsFromFields(int $total_ports, int $sfp_ports, int $port_index_start): array {
+    private function loadPortsFromFields(int $total_ports, int $sfp_ports, int $port_index_start, array $discovered_ports = []): array {
+        if ($discovered_ports !== []) {
+            $ports = [];
+            $visible_ports = array_slice($discovered_ports, 0, self::MAX_TOTAL_PORTS);
+            $copper_index = 0;
+            $sfp_index = 0;
+
+            foreach ($visible_ports as $index => $discovered_port) {
+                $is_sfp = !empty($discovered_port['is_sfp']);
+                if ($is_sfp) {
+                    $sfp_index++;
+                    $default_label = sprintf('SFP %02d', $sfp_index);
+                }
+                else {
+                    $copper_index++;
+                    $default_label = sprintf('GE %02d', $copper_index);
+                }
+
+                $field_index = $index + 1;
+                $mapped_index = (int) ($discovered_port['mapped_index'] ?? 0);
+                if ($mapped_index <= 0) {
+                    $mapped_index = $port_index_start + $index;
+                }
+
+                $manual_triggerid = trim((string) ($this->fields_values['port'.$field_index.'_triggerid'] ?? ''));
+                $ports[] = [
+                    'index' => $field_index,
+                    'mapped_index' => $mapped_index,
+                    'name' => $this->resolvePortName($field_index, (string) ($discovered_port['name'] ?? $default_label)),
+                    'port_code' => $default_label,
+                    'is_sfp' => $is_sfp,
+                    'triggerid' => $manual_triggerid !== ''
+                        ? $manual_triggerid
+                        : trim((string) ($discovered_port['default_triggerid'] ?? '')),
+                    'default_color' => $this->safeColor((string) ($this->fields_values['port'.$field_index.'_default_color'] ?? '#64748B'), '#64748B'),
+                    'ok_color' => $this->safeColor((string) ($this->fields_values['port'.$field_index.'_ok_color'] ?? '#34D399'), '#34D399'),
+                    'problem_color' => $this->safeColor((string) ($this->fields_values['port'.$field_index.'_problem_color'] ?? '#FB7185'), '#FB7185'),
+                    'traffic_in_token' => trim((string) ($discovered_port['traffic_in_token'] ?? '')),
+                    'traffic_out_token' => trim((string) ($discovered_port['traffic_out_token'] ?? '')),
+                    'speed_token' => trim((string) ($discovered_port['speed_token'] ?? ''))
+                ];
+            }
+
+            return $ports;
+        }
+
         $ports = [];
         $sfp_start_index = $sfp_ports > 0 ? ($total_ports - $sfp_ports + 1) : PHP_INT_MAX;
 
@@ -292,6 +448,38 @@ class WidgetView extends CControllerDashboardWidgetView {
         ];
     }
 
+    private function loadSelectedItemTexts(array $field_itemids): array {
+        $itemids = array_values(array_unique(array_filter($field_itemids, static fn(string $itemid): bool => $itemid !== '')));
+        if ($itemids === []) {
+            return [];
+        }
+
+        $rows = API::Item()->get([
+            'output' => ['itemid', 'lastvalue', 'name'],
+            'itemids' => $itemids,
+            'preservekeys' => true
+        ]);
+
+        $values_by_itemid = [];
+        foreach ($rows as $itemid => $row) {
+            $value = trim((string) ($row['lastvalue'] ?? ''));
+            if ($value === '') {
+                $value = trim((string) ($row['name'] ?? ''));
+            }
+
+            $values_by_itemid[(string) $itemid] = $value;
+        }
+
+        $result = [];
+        foreach ($field_itemids as $field => $itemid) {
+            if ($itemid !== '' && array_key_exists($itemid, $values_by_itemid)) {
+                $result[$field] = $values_by_itemid[$itemid];
+            }
+        }
+
+        return $result;
+    }
+
     private function loadTriggerMeta(array $ports): array {
         $triggerids = [];
         foreach ($ports as $port) {
@@ -332,9 +520,9 @@ class WidgetView extends CControllerDashboardWidgetView {
         return substr($value, 0, 255);
     }
 
-    private function resolvePortItemKey(string $pattern, int $port_index): string {
+    private function resolvePortItemKey(string $pattern, int $port_index, string $wildcard = ''): string {
         if (strpos($pattern, '*') !== false) {
-            return str_replace('*', (string) $port_index, $pattern);
+            return str_replace('*', $wildcard !== '' ? $wildcard : (string) $port_index, $pattern);
         }
 
         return $pattern;
@@ -360,7 +548,7 @@ class WidgetView extends CControllerDashboardWidgetView {
         }
 
         $rows = API::Item()->get([
-            'output' => ['itemid', 'key_', 'value_type'],
+            'output' => ['itemid', 'key_', 'name', 'units', 'value_type'],
             'hostids' => [$hostid],
             'filter' => ['key_' => $keys]
         ]);
@@ -368,6 +556,8 @@ class WidgetView extends CControllerDashboardWidgetView {
         $result = [];
         foreach ($rows as $row) {
             $key = (string) ($row['key_'] ?? '');
+            $name = (string) ($row['name'] ?? '');
+            $units = (string) ($row['units'] ?? '');
             $value_type = (int) ($row['value_type'] ?? 3);
             if ($key === '' || !in_array($value_type, [0, 3], true)) {
                 continue;
@@ -406,11 +596,14 @@ class WidgetView extends CControllerDashboardWidgetView {
                     $delta_value = 0.0;
                 }
 
-                if ($this->looksLikeCounterKey($key)) {
-                    $series[] = $this->normalizeTrafficToBps($delta_value / $delta_time, $key);
+                if ($this->usesDirectTrafficValues($key, $name, $units)) {
+                    $series[] = $this->normalizeTrafficToBps($value, $key, $units);
+                }
+                elseif ($this->looksLikeCounterKey($key, $name, $units)) {
+                    $series[] = $this->normalizeTrafficToBps($delta_value / $delta_time, $key, $units);
                 }
                 else {
-                    $series[] = $this->normalizeTrafficToBps($value, $key);
+                    $series[] = $this->normalizeTrafficToBps($value, $key, $units);
                 }
 
                 $previous = ['clock' => $clock, 'value' => $value];
@@ -428,7 +621,7 @@ class WidgetView extends CControllerDashboardWidgetView {
         }
 
         $rows = API::Item()->get([
-            'output' => ['key_', 'lastvalue'],
+            'output' => ['key_', 'lastvalue', 'units'],
             'hostids' => [$hostid],
             'filter' => ['key_' => $keys]
         ]);
@@ -440,7 +633,10 @@ class WidgetView extends CControllerDashboardWidgetView {
                 continue;
             }
 
-            $result[$key] = $this->toFloat($row['lastvalue'] ?? 0);
+            $result[$key] = [
+                'value' => $this->toFloat($row['lastvalue'] ?? 0),
+                'units' => (string) ($row['units'] ?? '')
+            ];
         }
 
         return $result;
@@ -486,16 +682,46 @@ class WidgetView extends CControllerDashboardWidgetView {
         ];
     }
 
-    private function looksLikeCounterKey(string $key): bool {
+    private function usesDirectTrafficValues(string $key, string $name, string $units): bool {
         $key = strtolower($key);
-        return strpos($key, 'octet') !== false
-            || strpos($key, 'byte') !== false
-            || strpos($key, 'counter') !== false;
+        $name = strtolower($name);
+        $units = strtolower(trim($units));
+
+        if ($units === 'bps' || $units === 'b/s' || $units === 'bit/s') {
+            return true;
+        }
+
+        return str_starts_with($key, 'net.if.in[')
+            || str_starts_with($key, 'net.if.out[')
+            || strpos($name, 'bits received') !== false
+            || strpos($name, 'bits sent') !== false;
     }
 
-    private function normalizeTrafficToBps(float $value, string $key): float {
+    private function looksLikeCounterKey(string $key, string $name = '', string $units = ''): bool {
         $key = strtolower($key);
-        if (strpos($key, 'octet') !== false || strpos($key, 'byte') !== false) {
+        $name = strtolower($name);
+        $units = strtolower(trim($units));
+
+        if ($this->usesDirectTrafficValues($key, $name, $units)) {
+            return false;
+        }
+
+        return strpos($key, 'octet') !== false
+            || strpos($key, 'byte') !== false
+            || strpos($key, 'counter') !== false
+            || strpos($units, 'octets') !== false
+            || strpos($units, 'bytes') !== false;
+    }
+
+    private function normalizeTrafficToBps(float $value, string $key, string $units = ''): float {
+        $key = strtolower($key);
+        $units = strtolower(trim($units));
+
+        if ($units === 'bps' || $units === 'b/s' || $units === 'bit/s') {
+            return $value;
+        }
+
+        if (strpos($key, 'octet') !== false || strpos($key, 'byte') !== false || strpos($units, 'bytes') !== false || strpos($units, 'octets') !== false) {
             return $value * 8.0;
         }
 
@@ -563,9 +789,14 @@ class WidgetView extends CControllerDashboardWidgetView {
         return is_numeric($text) ? (float) $text : 0.0;
     }
 
-    private function toSpeedBps(float $speed_value, string $speed_key): float {
+    private function toSpeedBps(float $speed_value, string $speed_key, string $speed_units = ''): float {
         if ($speed_value <= 0.0) {
             return 0.0;
+        }
+
+        $speed_units = strtolower(trim($speed_units));
+        if ($speed_units === 'bps' || $speed_units === 'b/s' || $speed_units === 'bit/s') {
+            return $speed_value;
         }
 
         if (stripos($speed_key, 'ifhighspeed') !== false) {
