@@ -14,9 +14,9 @@ class WidgetForm extends CWidgetForm {
     private const CARD_LANGUAGE_AUTO = 0;
     private const CARD_LANGUAGE_ZH_CN = 1;
     private const CARD_LANGUAGE_EN_US = 2;
-    private const THEME_GRAPHITE = 0;
-    private const THEME_AURORA = 1;
-    private const THEME_EMBER = 2;
+    private const THEME_FOLLOW_ZABBIX = 0;
+    private const THEME_LIGHT = 1;
+    private const THEME_DARK = 2;
     private const DEFAULT_ROW_COUNT = 2;
     private const DEFAULT_PORTS_PER_ROW = 12;
     private const DEFAULT_TRAFFIC_IN_PATTERN = 'net.if.in[*]';
@@ -104,10 +104,10 @@ class WidgetForm extends CWidgetForm {
 
         $this->addField(
             (new CWidgetFieldSelect('visual_theme', _('Theme'), [
-                self::THEME_GRAPHITE => _('Graphite'),
-                self::THEME_AURORA => _('Aurora'),
-                self::THEME_EMBER => _('Ember')
-            ]))->setDefault(self::THEME_GRAPHITE)
+                self::THEME_FOLLOW_ZABBIX => _('Follow Zabbix'),
+                self::THEME_LIGHT => _('Light'),
+                self::THEME_DARK => _('Dark')
+            ]))->setDefault(self::THEME_FOLLOW_ZABBIX)
         );
         $this->addField(
             (new CWidgetFieldSelect('card_language', _('Card language'), [

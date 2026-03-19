@@ -15,9 +15,9 @@ class WidgetView extends CControllerDashboardWidgetView {
     private const CARD_LANGUAGE_AUTO = 0;
     private const CARD_LANGUAGE_ZH_CN = 1;
     private const CARD_LANGUAGE_EN_US = 2;
-    private const THEME_GRAPHITE = 0;
-    private const THEME_AURORA = 1;
-    private const THEME_EMBER = 2;
+    private const THEME_FOLLOW_ZABBIX = 0;
+    private const THEME_LIGHT = 1;
+    private const THEME_DARK = 2;
     private const DEFAULT_ROW_COUNT = 2;
     private const DEFAULT_PORTS_PER_ROW = 12;
     private const DEFAULT_TRAFFIC_IN_PATTERN = 'net.if.in[*]';
@@ -258,18 +258,28 @@ class WidgetView extends CControllerDashboardWidgetView {
     }
 
     private function resolveTheme(): string {
-        $theme = $this->fields_values['visual_theme'] ?? self::THEME_GRAPHITE;
+        $theme = $this->fields_values['visual_theme'] ?? self::THEME_FOLLOW_ZABBIX;
 
         if (is_numeric($theme)) {
             return match ((int) $theme) {
-                self::THEME_AURORA => 'aurora',
-                self::THEME_EMBER => 'ember',
-                default => 'graphite'
+                self::THEME_LIGHT => 'light',
+                self::THEME_DARK => 'dark',
+                default => $this->resolveZabbixThemeMode()
             };
         }
 
         $theme = strtolower(trim((string) $theme));
-        return in_array($theme, ['graphite', 'aurora', 'ember'], true) ? $theme : 'graphite';
+        return match ($theme) {
+            'light' => 'light',
+            'dark' => 'dark',
+            default => $this->resolveZabbixThemeMode()
+        };
+    }
+
+    private function resolveZabbixThemeMode(): string {
+        $theme = strtolower((string) \getUserTheme(CWebUser::$data ?? []));
+
+        return in_array($theme, ['dark-theme', 'hc-dark'], true) ? 'dark' : 'light';
     }
 
     private function resolveText(string $field, string $preferred, string $fallback): string {
