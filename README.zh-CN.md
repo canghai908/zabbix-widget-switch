@@ -22,7 +22,17 @@
 
 ## 界面截图
 
-截图可后续补充到 `assets/screenshots/` 目录。
+### 仪表板效果 - Aurora 主题
+
+![仪表板效果 - Aurora 主题](screenshots/dashboard-aurora-theme.png)
+
+### 仪表板效果 - Ember 主题
+
+![仪表板效果 - Ember 主题](screenshots/dashboard-ember-theme.png)
+
+### 编辑配置界面
+
+![编辑配置界面](screenshots/widget-edit-form.png)
 
 ## 安装方式
 

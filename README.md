@@ -7,7 +7,17 @@ A Zabbix 7.x dashboard widget for rendering switch ports with interface status, 
 
 ## Screenshots
 
-Screenshots can be added later under `assets/screenshots/`.
+### Dashboard - Aurora theme
+
+![Dashboard - Aurora theme](screenshots/dashboard-aurora-theme.png)
+
+### Dashboard - Ember theme
+
+![Dashboard - Ember theme](screenshots/dashboard-ember-theme.png)
+
+### Widget edit form
+
+![Widget edit form](screenshots/widget-edit-form.png)
 
 ## Features
 
@@ -42,15 +52,7 @@ Screenshots can be added later under `assets/screenshots/`.
 Example:
 
 ```bash
-DEPLOY_SSH_HOST='172.16.60.41' \
-DEPLOY_SSH_USER='root' \
-DEPLOY_SSH_PASSWORD='your-root-password' \
-DEPLOY_SSH_STRICT_HOSTKEY='no' \
-DEPLOY_SSH_KNOWN_HOSTS_FILE='/dev/null' \
-DEPLOY_TARGET_DIR='/usr/share/zabbix/modules/switchpanel' \
-DEPLOY_TARGET_OWNER='zabbix' \
-DEPLOY_TARGET_GROUP='zabbix' \
-./scripts/deploy_test.sh deploy
+DEPLOY_SSH_HOST='172.16.60.41' DEPLOY_SSH_USER='root' DEPLOY_SSH_PASSWORD='your-root-password' DEPLOY_SSH_STRICT_HOSTKEY='no' DEPLOY_SSH_KNOWN_HOSTS_FILE='/dev/null' DEPLOY_TARGET_DIR='/usr/share/zabbix/modules/switchpanel' DEPLOY_TARGET_OWNER='zabbix' DEPLOY_TARGET_GROUP='zabbix' ./scripts/deploy_test.sh deploy
 ```
 
 ## Notes

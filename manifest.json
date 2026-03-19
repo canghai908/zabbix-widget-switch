@@ -7,7 +7,7 @@
   "version": "0.0.1",
   "author": "canghai809",
   "description": "Modern switch-style dashboard widget with per-port trigger states.",
-  "url": "",
+  "url": "https://github.com/canghai908/zabbix-widget-switch",
   "actions": {
     "widget.switchpanel.view": {
       "class": "WidgetView"
