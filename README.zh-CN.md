@@ -36,27 +36,6 @@
    - `Speed item pattern`
    - `Status item pattern`
 
-## 自动发布 Releases
-
-仓库已经增加 GitHub Actions 工作流：`.github/workflows/release.yml`
-
-使用方式：
-
-1. 提交代码并推送到 GitHub
-2. 创建版本标签，例如：`v0.0.1`
-3. 推送标签：
-
-```bash
-git tag v0.0.1
-git push origin v0.0.1
-```
-
-之后 GitHub Actions 会自动：
-
-- 打包模块目录
-- 生成 `zip` 和 `tar.gz` 文件
-- 自动发布到 GitHub Releases
-
 ## 其他说明
 
 - 插件作者：`canghai809`

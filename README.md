@@ -31,14 +31,6 @@ Screenshots can be added later under `assets/screenshots/`.
    - `Speed item pattern`
    - `Status item pattern`
 
-## Release workflow
-
-GitHub Actions is configured in `.github/workflows/release.yml`.
-
-- Push a tag like `v0.0.1`
-- GitHub Actions builds `zip` and `tar.gz` release packages
-- The workflow publishes them to GitHub Releases automatically
-
 ## Deploy test script
 
 `scripts/deploy_test.sh` supports:
