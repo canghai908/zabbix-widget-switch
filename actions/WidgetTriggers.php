@@ -168,11 +168,6 @@ class WidgetTriggers extends CController {
                 'name_terms' => ['model', 'product name', 'product', 'hardware model'],
                 'key_terms' => ['model', 'product'],
                 'avoid_terms' => ['interface', 'port', 'cpu', 'memory', 'disk']
-            ],
-            'switch_role_itemids' => [
-                'name_terms' => ['role', 'device role', 'system role', 'site role', 'function'],
-                'key_terms' => ['role', 'function'],
-                'avoid_terms' => ['interface', 'port', 'cpu', 'memory', 'disk']
             ]
         ];
 

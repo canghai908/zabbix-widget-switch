@@ -15,6 +15,8 @@ class WidgetView extends CControllerDashboardWidgetView {
     private const CARD_LANGUAGE_AUTO = 0;
     private const CARD_LANGUAGE_ZH_CN = 1;
     private const CARD_LANGUAGE_EN_US = 2;
+    private const PORT_CARD_LABEL_NAME = 0;
+    private const PORT_CARD_LABEL_DESCRIPTION = 1;
     private const THEME_FOLLOW_ZABBIX = 0;
     private const THEME_LIGHT = 1;
     private const THEME_DARK = 2;
@@ -24,7 +26,6 @@ class WidgetView extends CControllerDashboardWidgetView {
     private const DEFAULT_TRAFFIC_OUT_PATTERN = 'net.if.out[*]';
     private const DEFAULT_SPEED_PATTERN = 'net.if.speed[*]';
     private const DEFAULT_STATUS_PATTERN = 'net.if.status[*]';
-    private const DEFAULT_PORT_INDEX_START = 1;
     private const TRAFFIC_LOOKBACK_SECONDS = 1800;
     private const TRAFFIC_POINTS = 18;
     private const MAX_ROW_COUNT = 6;
@@ -37,8 +38,7 @@ class WidgetView extends CControllerDashboardWidgetView {
         $widget_name = $this->resolveWidgetName();
         $item_texts = $this->loadSelectedItemTexts([
             'switch_brand_itemids' => $this->extractFirstId('switch_brand_itemids'),
-            'switch_model_itemids' => $this->extractFirstId('switch_model_itemids'),
-            'switch_role_itemids' => $this->extractFirstId('switch_role_itemids')
+            'switch_model_itemids' => $this->extractFirstId('switch_model_itemids')
         ]);
         $switch_brand = $this->resolveTextSource(
             'switch_brand',
@@ -52,13 +52,9 @@ class WidgetView extends CControllerDashboardWidgetView {
             (string) ($host['model'] ?? ''),
             'S5850-48T4Q'
         );
-        $switch_role = $this->resolveTextSource(
-            'switch_role',
-            (string) ($item_texts['switch_role_itemids'] ?? ''),
-            '',
-            'Campus Aggregation'
-        );
+        $switch_role = $this->resolveText('switch_role', '', 'Campus Aggregation');
         $card_language_mode = (int) ($this->fields_values['card_language'] ?? self::CARD_LANGUAGE_AUTO);
+        $port_card_label_mode = $this->resolvePortCardLabelMode();
         $visual_theme = $this->resolveTheme();
         $panel_scale = $this->clamp($this->extractPositiveInt($this->fields_values['panel_scale'] ?? 92), 84, 100);
         $utilization_overlay_enabled = true;
@@ -78,10 +74,6 @@ class WidgetView extends CControllerDashboardWidgetView {
             (string) ($this->fields_values['status_item_pattern'] ?? self::DEFAULT_STATUS_PATTERN),
             self::DEFAULT_STATUS_PATTERN
         );
-        $port_index_start = max(0, $this->extractPositiveInt($this->fields_values['port_index_start'] ?? self::DEFAULT_PORT_INDEX_START));
-        if ($port_index_start === 0) {
-            $port_index_start = self::DEFAULT_PORT_INDEX_START;
-        }
 
         $discovery = PortDiscovery::discover($hostid, [
             'traffic_in' => $traffic_in_pattern,
@@ -90,7 +82,7 @@ class WidgetView extends CControllerDashboardWidgetView {
             'status' => $status_pattern
         ]);
         $layout = $this->getLayout($discovery['ports'] ?? []);
-        $ports = $this->loadPortsFromFields($layout['total_ports'], $layout['sfp_ports'], $port_index_start, $discovery['ports'] ?? []);
+        $ports = $this->loadPortsFromFields($layout['total_ports'], $layout['sfp_ports'], $discovery['ports'] ?? []);
 
         if ($hostid !== '' && !$this->hasHostAccess($hostid)) {
             $this->setResponse(new CControllerResponseData([
@@ -102,6 +94,7 @@ class WidgetView extends CControllerDashboardWidgetView {
                 'switch_model' => $switch_model,
                 'switch_role' => $switch_role,
                 'card_language_mode' => $card_language_mode,
+                'port_card_label_mode' => $port_card_label_mode,
                 'user_lang' => CWebUser::getLang(),
                 'visual_theme' => $visual_theme,
                 'panel_scale' => $panel_scale,
@@ -229,6 +222,7 @@ class WidgetView extends CControllerDashboardWidgetView {
             'switch_model' => $switch_model,
             'switch_role' => $switch_role,
             'card_language_mode' => $card_language_mode,
+            'port_card_label_mode' => $port_card_label_mode,
             'user_lang' => CWebUser::getLang(),
             'visual_theme' => $visual_theme,
             'panel_scale' => $panel_scale,
@@ -274,6 +268,20 @@ class WidgetView extends CControllerDashboardWidgetView {
             'dark' => 'dark',
             default => $this->resolveZabbixThemeMode()
         };
+    }
+
+    private function resolvePortCardLabelMode(): int {
+        $mode = $this->fields_values['port_card_label_mode'] ?? self::PORT_CARD_LABEL_NAME;
+
+        if (is_numeric($mode)) {
+            return (int) $mode === self::PORT_CARD_LABEL_DESCRIPTION
+                ? self::PORT_CARD_LABEL_DESCRIPTION
+                : self::PORT_CARD_LABEL_NAME;
+        }
+
+        return strtolower(trim((string) $mode)) === 'description'
+            ? self::PORT_CARD_LABEL_DESCRIPTION
+            : self::PORT_CARD_LABEL_NAME;
     }
 
     private function resolveZabbixThemeMode(): string {
@@ -373,7 +381,7 @@ class WidgetView extends CControllerDashboardWidgetView {
         return $this->clamp((int) ceil($base_ports / $row_count), 1, self::MAX_PORTS_PER_ROW);
     }
 
-    private function loadPortsFromFields(int $total_ports, int $sfp_ports, int $port_index_start, array $discovered_ports = []): array {
+    private function loadPortsFromFields(int $total_ports, int $sfp_ports, array $discovered_ports = []): array {
         if ($discovered_ports !== []) {
             $ports = [];
             $visible_ports = array_slice($discovered_ports, 0, self::MAX_TOTAL_PORTS);
@@ -394,7 +402,7 @@ class WidgetView extends CControllerDashboardWidgetView {
                 $field_index = $index + 1;
                 $mapped_index = (int) ($discovered_port['mapped_index'] ?? 0);
                 if ($mapped_index <= 0) {
-                    $mapped_index = $port_index_start + $index;
+                    $mapped_index = $field_index;
                 }
 
                 $manual_triggerid = trim((string) ($this->fields_values['port'.$field_index.'_triggerid'] ?? ''));
@@ -402,6 +410,7 @@ class WidgetView extends CControllerDashboardWidgetView {
                     'index' => $field_index,
                     'mapped_index' => $mapped_index,
                     'name' => $this->resolvePortName($field_index, (string) ($discovered_port['name'] ?? $default_label)),
+                    'description' => trim((string) ($discovered_port['description'] ?? '')),
                     'port_code' => $default_label,
                     'is_sfp' => $is_sfp,
                     'triggerid' => $manual_triggerid !== ''
@@ -431,8 +440,9 @@ class WidgetView extends CControllerDashboardWidgetView {
 
             $ports[] = [
                 'index' => $i,
-                'mapped_index' => $port_index_start + $i - 1,
+                'mapped_index' => $i,
                 'name' => $this->resolvePortName($i, $default_label),
+                'description' => '',
                 'port_code' => $default_label,
                 'is_sfp' => $is_sfp,
                 'triggerid' => trim((string) ($this->fields_values['port'.$i.'_triggerid'] ?? '')),
@@ -640,15 +650,7 @@ class WidgetView extends CControllerDashboardWidgetView {
     }
 
     private function extractInterfaceNameFromTriggerDescription(string $description): string {
-        if (preg_match('/Interface\s+(.+?)\(\):/i', $description, $matches) === 1) {
-            return trim((string) $matches[1]);
-        }
-
-        if (preg_match('/Port\s+(.+?):/i', $description, $matches) === 1) {
-            return trim((string) $matches[1]);
-        }
-
-        return '';
+        return $this->extractInterfaceMetaFromTriggerDescription($description)['name'];
     }
 
     private function extractTrailingIndex(string $value): int {
@@ -657,6 +659,37 @@ class WidgetView extends CControllerDashboardWidgetView {
         }
 
         return (int) $matches[1];
+    }
+
+    private function extractInterfaceMetaFromTriggerDescription(string $description): array {
+        foreach ([
+            '/Interface\s+(.+?):/i',
+            '/Port\s+(.+?):/i'
+        ] as $pattern) {
+            if (preg_match($pattern, $description, $matches) !== 1) {
+                continue;
+            }
+
+            return $this->splitInterfaceLabel(trim((string) ($matches[1] ?? '')));
+        }
+
+        return ['name' => '', 'description' => ''];
+    }
+
+    private function splitInterfaceLabel(string $label): array {
+        $label = trim($label);
+        if ($label === '') {
+            return ['name' => '', 'description' => ''];
+        }
+
+        if (preg_match('/^(.+?)\((.*)\)$/', $label, $matches) === 1) {
+            return [
+                'name' => trim((string) $matches[1]),
+                'description' => trim((string) $matches[2])
+            ];
+        }
+
+        return ['name' => $label, 'description' => ''];
     }
 
     private function sanitizeItemPattern(string $value, string $fallback): string {

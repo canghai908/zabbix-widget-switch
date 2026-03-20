@@ -135,7 +135,10 @@ api_request() {
     local response
     local -a args
 
-    mapfile -t args < <(curl_args)
+    args=()
+    while IFS= read -r line; do
+        args+=("${line}")
+    done < <(curl_args)
     if ! response="$(
         curl -fsS "${args[@]}" \
             -H 'Content-Type: application/json-rpc' \
@@ -267,7 +270,38 @@ ssh_cmd() {
     shift
 
     if [[ -n "${password}" ]]; then
-        SSHPASS="${password}" sshpass -e ssh "$@"
+        if command -v sshpass >/dev/null 2>&1; then
+            SSHPASS="${password}" sshpass -e ssh "$@"
+            return
+        fi
+
+        if command -v expect >/dev/null 2>&1; then
+            expect -f - "${password}" ssh "$@" <<'EOF'
+set timeout -1
+set password [lindex $argv 0]
+set cmd [lrange $argv 1 end]
+
+spawn {*}$cmd
+expect {
+    -re "(?i)are you sure you want to continue connecting" {
+        send -- "yes\r"
+        exp_continue
+    }
+    -re "(?i)(?:password|passphrase).*:" {
+        send -- "$password\r"
+        exp_continue
+    }
+    eof {
+        catch wait result
+        set exit_status [lindex $result 3]
+        exit $exit_status
+    }
+}
+EOF
+            return
+        fi
+
+        die "missing required command: sshpass or expect"
     else
         ssh "$@"
     fi
@@ -278,7 +312,38 @@ rsync_cmd() {
     shift
 
     if [[ -n "${password}" ]]; then
-        SSHPASS="${password}" rsync "$@"
+        if command -v sshpass >/dev/null 2>&1; then
+            SSHPASS="${password}" rsync "$@"
+            return
+        fi
+
+        if command -v expect >/dev/null 2>&1; then
+            expect -f - "${password}" rsync "$@" <<'EOF'
+set timeout -1
+set password [lindex $argv 0]
+set cmd [lrange $argv 1 end]
+
+spawn {*}$cmd
+expect {
+    -re "(?i)are you sure you want to continue connecting" {
+        send -- "yes\r"
+        exp_continue
+    }
+    -re "(?i)(?:password|passphrase).*:" {
+        send -- "$password\r"
+        exp_continue
+    }
+    eof {
+        catch wait result
+        set exit_status [lindex $result 3]
+        exit $exit_status
+    }
+}
+EOF
+            return
+        fi
+
+        die "missing required command: sshpass or expect"
     else
         rsync "$@"
     fi
@@ -315,12 +380,17 @@ deploy_module() {
     require_cmd ssh tar
     ssh_password="$(read_ssh_password)"
     if [[ -n "${ssh_password}" ]]; then
-        require_cmd sshpass
+        if ! command -v sshpass >/dev/null 2>&1 && ! command -v expect >/dev/null 2>&1; then
+            die "missing required command: sshpass or expect"
+        fi
     fi
 
     remote="${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}"
     stage_dir="$(mktemp -d)"
-    mapfile -t ssh_opts < <(ssh_options)
+    ssh_opts=()
+    while IFS= read -r line; do
+        ssh_opts+=("${line}")
+    done < <(ssh_options)
 
     stage_module "${stage_dir}"
 
@@ -351,7 +421,7 @@ EOF
 
     if command -v rsync >/dev/null 2>&1 && [[ "${remote_has_rsync}" == "yes" ]]; then
         ssh_rsh=(ssh "${ssh_opts[@]}")
-        if [[ -n "${ssh_password}" ]]; then
+        if [[ -n "${ssh_password}" ]] && command -v sshpass >/dev/null 2>&1; then
             ssh_rsh=(sshpass -e "${ssh_rsh[@]}")
         fi
 

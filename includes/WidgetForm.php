@@ -14,6 +14,8 @@ class WidgetForm extends CWidgetForm {
     private const CARD_LANGUAGE_AUTO = 0;
     private const CARD_LANGUAGE_ZH_CN = 1;
     private const CARD_LANGUAGE_EN_US = 2;
+    private const PORT_CARD_LABEL_NAME = 0;
+    private const PORT_CARD_LABEL_DESCRIPTION = 1;
     private const THEME_FOLLOW_ZABBIX = 0;
     private const THEME_LIGHT = 1;
     private const THEME_DARK = 2;
@@ -23,7 +25,6 @@ class WidgetForm extends CWidgetForm {
     private const DEFAULT_TRAFFIC_OUT_PATTERN = 'net.if.out[*]';
     private const DEFAULT_SPEED_PATTERN = 'net.if.speed[*]';
     private const DEFAULT_STATUS_PATTERN = 'net.if.status[*]';
-    private const DEFAULT_PORT_INDEX_START = 1;
     private const MAX_ROW_COUNT = 6;
     private const MAX_PORTS_PER_ROW = 24;
     private const MAX_TOTAL_PORTS = 96;
@@ -67,17 +68,6 @@ class WidgetForm extends CWidgetForm {
                 ->setDefault('Campus Aggregation')
         );
         $this->addField(
-            (new CWidgetFieldSelect('switch_role_source', _('Role source'), [
-                self::SOURCE_MANUAL => _('Manual text'),
-                self::SOURCE_ITEM => _('Item value')
-            ]))->setDefault(self::SOURCE_MANUAL)
-        );
-        $this->addField(
-            (new CWidgetFieldMultiSelectItem('switch_role_itemids', _('Role item')))
-                ->setMultiple(false)
-        );
-
-        $this->addField(
             (new CWidgetFieldTextBox('row_count', _('Rows')))
                 ->setDefault((string) self::DEFAULT_ROW_COUNT)
         );
@@ -97,10 +87,6 @@ class WidgetForm extends CWidgetForm {
             (new CWidgetFieldTextBox('status_item_pattern', _('Status item pattern')))
                 ->setDefault(self::DEFAULT_STATUS_PATTERN)
         );
-        $this->addField(
-            (new CWidgetFieldTextBox('port_index_start', _('Port index start')))
-                ->setDefault((string) self::DEFAULT_PORT_INDEX_START)
-        );
 
         $this->addField(
             (new CWidgetFieldSelect('visual_theme', _('Theme'), [
@@ -115,6 +101,12 @@ class WidgetForm extends CWidgetForm {
                 self::CARD_LANGUAGE_ZH_CN => _('Chinese'),
                 self::CARD_LANGUAGE_EN_US => _('English')
             ]))->setDefault(self::CARD_LANGUAGE_AUTO)
+        );
+        $this->addField(
+            (new CWidgetFieldSelect('port_card_label_mode', _('Port card label'), [
+                self::PORT_CARD_LABEL_NAME => _('Port name'),
+                self::PORT_CARD_LABEL_DESCRIPTION => _('Port description')
+            ]))->setDefault(self::PORT_CARD_LABEL_NAME)
         );
         $this->addField(
             (new CWidgetFieldSelect('panel_scale', _('Panel size'), [

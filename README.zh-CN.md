@@ -17,8 +17,17 @@
 - 统计 `Up`、`Down`、`异常端口`
 - 支持流量、速率、状态监控项模式配置
 - 支持读取状态监控项的 value map 映射结果
-- 支持按主机范围选择 Brand、Model、Role 对应 item
+- 支持按主机范围选择 Brand、Model 对应 item
+- 支持手工输入 Role label
+- 支持端口卡片显示端口名称或端口描述
 - 支持中英文卡片文案切换
+
+## v0.0.2 更新内容
+
+- 优化端口卡片布局，顶部区域和遥测信息更紧凑
+- 调整端口利用率进度条样式，提升对比度和可读性
+- `Role label` 改为仅支持手工输入
+- 移除部分顶部状态徽标，让仪表板显示更清爽
 
 ## 界面截图
 
@@ -45,8 +54,9 @@
    - `Traffic out item pattern`
    - `Speed item pattern`
    - `Status item pattern`
+   - `Port card label`
 
 ## 其他说明
 
 - 插件作者：`canghai809`
-- 当前版本：`0.0.1`
+- 当前版本：`0.0.2`

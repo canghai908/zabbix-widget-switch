@@ -26,8 +26,17 @@ A Zabbix 7.x dashboard widget for rendering switch ports with interface status, 
 - Show `Up`, `Down`, and `Alert` port statistics
 - Support interface traffic, speed, and status item patterns
 - Support interface value map display for status text
-- Support host-scoped Brand, Model, and Role item selection
+- Support host-scoped Brand and Model item selection
+- Support manual Role label input
+- Support choosing port name or port description as the card label
 - Support Chinese and English card text selection
+
+## v0.0.2 Highlights
+
+- Refined the port card layout with a more compact header and cleaner telemetry area
+- Improved the port utilization gauge styling and visual contrast
+- Switched `Role label` to manual input only
+- Removed extra header status badges for a cleaner dashboard presentation
 
 ## Install
 
@@ -40,6 +49,7 @@ A Zabbix 7.x dashboard widget for rendering switch ports with interface status, 
    - `Traffic out item pattern`
    - `Speed item pattern`
    - `Status item pattern`
+   - `Port card label`
 
 ## Deploy test script
 
@@ -58,4 +68,4 @@ DEPLOY_SSH_HOST='172.16.60.41' DEPLOY_SSH_USER='root' DEPLOY_SSH_PASSWORD='your-
 ## Notes
 
 - Author: `canghai809`
-- Version: `0.0.1`
+- Version: `0.0.2`

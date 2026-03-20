@@ -312,7 +312,6 @@
     function syncMetadataSourceFields() {
         syncTextSource('switch_brand');
         syncTextSource('switch_model');
-        syncTextSource('switch_role');
     }
 
     function updateItemPopupHost(prefix, hostId) {
@@ -371,8 +370,7 @@
     function applyRecommendedMetadataItems() {
         const mapping = [
             ['switch_brand', 'switch_brand_itemids'],
-            ['switch_model', 'switch_model_itemids'],
-            ['switch_role', 'switch_role_itemids']
+            ['switch_model', 'switch_model_itemids']
         ];
 
         for (const [prefix, fieldName] of mapping) {
@@ -469,7 +467,6 @@
         syncMetadataSourceFields();
         updateItemPopupHost('switch_brand', hostId);
         updateItemPopupHost('switch_model', hostId);
-        updateItemPopupHost('switch_role', hostId);
 
         if (hostId === currentHostId && discoveryKey === currentDiscoveryKey) {
             applyTriggerOptions();

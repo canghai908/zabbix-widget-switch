@@ -75,17 +75,20 @@ class PortDiscovery {
                     continue;
                 }
 
-                $port_name = self::extractInterfaceNameFromItemName($item_name);
-                $port_key = self::buildPortKey($token, $port_name);
+                $port_meta = self::extractInterfaceMetaFromItemName($item_name);
+                $port_name = $port_meta['name'];
+                $port_description = $port_meta['description'];
+                $port_key = self::buildPortKey($token, $port_name, $port_description);
 
                 if (!array_key_exists($port_key, $ports)) {
-                    $mapped_index = self::resolveMappedIndex($token, $port_name);
+                    $mapped_index = self::resolveMappedIndex($token, $port_name, $port_description);
 
                     $ports[$port_key] = [
                         'name' => $port_name !== '' ? $port_name : $token,
+                        'description' => $port_description,
                         'mapped_index' => $mapped_index,
                         'sort_index' => $mapped_index > 0 ? $mapped_index : PHP_INT_MAX,
-                        'is_sfp' => self::isSfpPort($port_name),
+                        'is_sfp' => self::isSfpPort($port_name !== '' ? $port_name : $token),
                         'traffic_in_token' => '',
                         'traffic_out_token' => '',
                         'speed_token' => '',
@@ -98,6 +101,9 @@ class PortDiscovery {
                 if ($ports[$port_key]['name'] === '' && $port_name !== '') {
                     $ports[$port_key]['name'] = $port_name;
                 }
+                if (($ports[$port_key]['description'] ?? '') === '' && $port_description !== '') {
+                    $ports[$port_key]['description'] = $port_description;
+                }
             }
         }
 
@@ -109,18 +115,21 @@ class PortDiscovery {
 
         foreach ($triggers as $trigger) {
             $description = (string) ($trigger['description'] ?? '');
-            $port_name = self::extractInterfaceNameFromTriggerDescription($description);
+            $port_meta = self::extractInterfaceMetaFromTriggerDescription($description);
+            $port_name = $port_meta['name'];
+            $port_description = $port_meta['description'];
 
             if ($port_name === '') {
                 continue;
             }
 
-            $port_key = self::buildPortKey($port_name, $port_name);
+            $port_key = self::buildPortKey($port_name, $port_name, $port_description);
             if (!array_key_exists($port_key, $ports)) {
-                $mapped_index = self::resolveMappedIndex($port_name, $port_name);
+                $mapped_index = self::resolveMappedIndex($port_name, $port_name, $port_description);
 
                 $ports[$port_key] = [
                     'name' => $port_name,
+                    'description' => $port_description,
                     'mapped_index' => $mapped_index,
                     'sort_index' => $mapped_index > 0 ? $mapped_index : PHP_INT_MAX,
                     'is_sfp' => self::isSfpPort($port_name),
@@ -177,6 +186,9 @@ class PortDiscovery {
         $port_name = trim((string) ($port['name'] ?? ''));
         $port_name_lc = strtolower($port_name);
         $port_name_norm = self::normalizeText($port_name);
+        $port_description = trim((string) ($port['description'] ?? ''));
+        $port_description_lc = strtolower($port_description);
+        $port_description_norm = self::normalizeText($port_description);
         $mapped_index = (int) ($port['mapped_index'] ?? 0);
         $priority = (int) ($trigger['priority'] ?? 0);
         $score = 0;
@@ -187,6 +199,15 @@ class PortDiscovery {
             }
             elseif ($port_name_norm !== '' && strpos($description_norm, $port_name_norm) !== false) {
                 $score += 100;
+            }
+        }
+
+        if ($port_description !== '') {
+            if ($port_description_lc !== '' && strpos($description_lc, $port_description_lc) !== false) {
+                $score += 70;
+            }
+            elseif ($port_description_norm !== '' && strpos($description_norm, $port_description_norm) !== false) {
+                $score += 55;
             }
         }
 
@@ -276,8 +297,8 @@ class PortDiscovery {
         return '/^'.str_replace('\*', '(.+)', preg_quote($pattern, '/')).'$/i';
     }
 
-    private static function buildPortKey(string $token, string $port_name): string {
-        $mapped_index = self::resolveMappedIndex($token, $port_name);
+    private static function buildPortKey(string $token, string $port_name, string $port_description = ''): string {
+        $mapped_index = self::resolveMappedIndex($token, $port_name, $port_description);
         if ($mapped_index > 0) {
             return 'idx:'.$mapped_index;
         }
@@ -287,13 +308,23 @@ class PortDiscovery {
             return 'name:'.$normalized_name;
         }
 
+        $normalized_description = self::normalizeText($port_description);
+        if ($normalized_description !== '') {
+            return 'desc:'.$normalized_description;
+        }
+
         return 'token:'.self::normalizeText($token);
     }
 
-    private static function resolveMappedIndex(string $token, string $port_name): int {
+    private static function resolveMappedIndex(string $token, string $port_name, string $port_description = ''): int {
         $from_name = self::extractTrailingIndex($port_name);
         if ($from_name > 0) {
             return $from_name;
+        }
+
+        $from_description = self::extractTrailingIndex($port_description);
+        if ($from_description > 0) {
+            return $from_description;
         }
 
         return self::extractTrailingIndex($token);
@@ -307,28 +338,18 @@ class PortDiscovery {
         return (int) $matches[1];
     }
 
-    private static function extractInterfaceNameFromItemName(string $item_name): string {
-        if (preg_match('/Interface\s+(.+?)\(\):/i', $item_name, $matches) === 1) {
-            return trim((string) $matches[1]);
-        }
-
-        if (preg_match('/Interface\s+(.+?):/i', $item_name, $matches) === 1) {
-            return trim((string) $matches[1]);
-        }
-
-        return '';
+    private static function extractInterfaceMetaFromItemName(string $item_name): array {
+        return self::extractInterfaceMeta($item_name, [
+            '/Interface\s+(.+?):/i',
+            '/Port\s+(.+?):/i'
+        ]);
     }
 
-    private static function extractInterfaceNameFromTriggerDescription(string $description): string {
-        if (preg_match('/Interface\s+(.+?)\(\):/i', $description, $matches) === 1) {
-            return trim((string) $matches[1]);
-        }
-
-        if (preg_match('/Port\s+(.+?):/i', $description, $matches) === 1) {
-            return trim((string) $matches[1]);
-        }
-
-        return '';
+    private static function extractInterfaceMetaFromTriggerDescription(string $description): array {
+        return self::extractInterfaceMeta($description, [
+            '/Interface\s+(.+?):/i',
+            '/Port\s+(.+?):/i'
+        ]);
     }
 
     private static function isSfpPort(string $port_name): bool {
@@ -340,5 +361,33 @@ class PortDiscovery {
 
     private static function normalizeText(string $value): string {
         return preg_replace('/[^a-z0-9]+/', '', strtolower($value)) ?? '';
+    }
+
+    private static function extractInterfaceMeta(string $text, array $patterns): array {
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $text, $matches) !== 1) {
+                continue;
+            }
+
+            return self::splitInterfaceLabel(trim((string) ($matches[1] ?? '')));
+        }
+
+        return ['name' => '', 'description' => ''];
+    }
+
+    private static function splitInterfaceLabel(string $label): array {
+        $label = trim($label);
+        if ($label === '') {
+            return ['name' => '', 'description' => ''];
+        }
+
+        if (preg_match('/^(.+?)\((.*)\)$/', $label, $matches) === 1) {
+            return [
+                'name' => trim((string) $matches[1]),
+                'description' => trim((string) $matches[2])
+            ];
+        }
+
+        return ['name' => $label, 'description' => ''];
     }
 }

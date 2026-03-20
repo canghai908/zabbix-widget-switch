@@ -13,9 +13,9 @@ $css = implode('', [
     '.swx-kicker{font-size:calc(11px * var(--swx-scale));letter-spacing:.22em;text-transform:uppercase;color:var(--swx-accent);font-weight:700;margin-bottom:calc(6px * var(--swx-scale));}',
     '.swx-title{font-size:calc(22px * var(--swx-scale));font-weight:800;line-height:1.1;color:var(--swx-text);margin-bottom:calc(6px * var(--swx-scale));}',
     '.swx-subtitle{font-size:calc(12px * var(--swx-scale));color:var(--swx-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}',
-    '.swx-chiprow{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:calc(8px * var(--swx-scale));}',
-    '.swx-chip{display:inline-flex;align-items:center;gap:6px;padding:calc(7px * var(--swx-scale)) calc(10px * var(--swx-scale));border-radius:999px;background:var(--swx-chip);border:1px solid var(--swx-panel-border);font-size:calc(11px * var(--swx-scale));color:var(--swx-text);}',
-    '.swx-chip-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--dot-color,var(--swx-accent));box-shadow:0 0 12px var(--dot-color,var(--swx-accent));}',
+    '.swx-chiprow{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:calc(6px * var(--swx-scale));}',
+    '.swx-chip{display:inline-flex;align-items:center;gap:5px;padding:calc(5px * var(--swx-scale)) calc(8px * var(--swx-scale));border-radius:999px;background:var(--swx-chip);border:1px solid var(--swx-panel-border);font-size:calc(10px * var(--swx-scale));color:var(--swx-text);}',
+    '.swx-chip-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--dot-color,var(--swx-accent));box-shadow:0 0 10px var(--dot-color,var(--swx-accent));}',
     '.swx-metrics{position:relative;z-index:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:calc(10px * var(--swx-scale));margin-bottom:calc(16px * var(--swx-scale));}',
     '.swx-metric{padding:calc(12px * var(--swx-scale));border-radius:18px;background:var(--swx-surface);border:1px solid var(--swx-panel-border);backdrop-filter:blur(14px);}',
     '.swx-metric-label{font-size:calc(11px * var(--swx-scale));color:var(--swx-muted);text-transform:uppercase;letter-spacing:.14em;margin-bottom:calc(6px * var(--swx-scale));}',
@@ -32,20 +32,24 @@ $css = implode('', [
     '.swx-port:hover{transform:translateY(-2px);border-color:var(--swx-panel-border);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 18px 28px var(--swx-shadow);}',
     '.swx-port:before{content:"";position:absolute;inset:1px;border-radius:17px;background:linear-gradient(160deg,rgba(255,255,255,.04),transparent 42%);pointer-events:none;}',
     '.swx-port-head{min-width:0;margin-bottom:calc(8px * var(--swx-scale));padding-right:calc(18px * var(--swx-scale));}',
-    '.swx-port-socket{position:relative;height:calc(34px * var(--swx-scale));border-radius:12px;background:linear-gradient(180deg,var(--swx-socket-top),var(--swx-socket-bottom));border:1px solid var(--swx-port-border);overflow:hidden;margin-bottom:calc(10px * var(--swx-scale));}',
+    '.swx-port-socket{position:relative;height:calc(34px * var(--swx-scale));border-radius:12px;background:linear-gradient(180deg,var(--swx-socket-top),var(--swx-socket-bottom));border:1px solid var(--swx-port-border);overflow:hidden;margin-bottom:calc(4px * var(--swx-scale));}',
     '.swx-port-socket:before{content:"";position:absolute;left:12%;right:12%;top:22%;height:50%;background:var(--swx-socket-core);border-radius:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04);z-index:1;}',
     '.swx-port-socket:after{display:none;}',
     '.swx-port.swx-port-sfp .swx-port-socket{background:linear-gradient(180deg,var(--swx-sfp-top),var(--swx-sfp-bottom));}',
     '.swx-port.swx-port-sfp .swx-port-socket:before{left:10%;right:10%;top:18%;height:52%;border-radius:10px;}',
+    '.swx-port-socket.swx-port-socket-overlay{display:flex;align-items:center;justify-content:center;padding:0;background:transparent;border-color:transparent;box-shadow:none;}',
     '.swx-port-socket.swx-port-socket-overlay:before{display:none;}',
     '.swx-port-led{position:absolute;right:calc(10px * var(--swx-scale));top:calc(10px * var(--swx-scale));width:10px;height:10px;border-radius:50%;background:var(--port-color);box-shadow:0 0 0 1px rgba(255,255,255,.18),0 0 14px var(--port-color),0 0 24px rgba(255,255,255,.06);}',
     '.swx-port-heat{position:absolute;left:14%;right:14%;top:26%;height:40%;border-radius:999px;overflow:hidden;z-index:3;}',
-    '.swx-port-gauge{display:block;width:100%;height:100%;min-width:0;}',
+    '.swx-port-gauge{display:block;width:100%;height:100%;min-width:0;filter:saturate(2.35) brightness(1.28) contrast(1.18) drop-shadow(0 0 calc(4px * var(--swx-scale)) var(--util-color));opacity:1;}',
     '.swx-port.swx-port-sfp .swx-port-heat{left:12%;right:12%;top:24%;height:44%;}',
     '.swx-port-gauge::part(bar){top:0;left:0;border:1px solid var(--swx-gauge-border);border-radius:999px;background:transparent;box-shadow:none;}',
+    '.swx-port-gauge::part(track),.swx-port-gauge::part(empty),.swx-port-gauge::part(container){background:transparent;box-shadow:none;}',
+    '.swx-port-socket.swx-port-socket-overlay .swx-port-heat{position:relative;left:auto;right:auto;top:auto;width:100%;height:calc(18px * var(--swx-scale));padding:calc(2px * var(--swx-scale)) calc(3px * var(--swx-scale));transform:none;border-radius:12px;background:var(--swx-surface);border:1px solid var(--swx-port-border);box-shadow:inset 0 1px 0 rgba(255,255,255,.05);}',
+    '.swx-port.swx-port-sfp .swx-port-socket.swx-port-socket-overlay .swx-port-heat{width:100%;height:calc(18px * var(--swx-scale));padding:calc(2px * var(--swx-scale)) calc(3px * var(--swx-scale));transform:none;}',
     '.swx-port-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:calc(12px * var(--swx-scale));font-weight:700;line-height:1.3;color:var(--swx-text);word-break:break-word;}',
     '.swx-port-meta{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:calc(10px * var(--swx-scale));line-height:1.3;color:var(--swx-muted);min-height:calc(26px * var(--swx-scale));}',
-    '.swx-port-telemetry{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(6px * var(--swx-scale));margin-top:calc(8px * var(--swx-scale));}',
+    '.swx-port-telemetry{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(6px * var(--swx-scale));margin-top:calc(3px * var(--swx-scale));}',
     '.swx-port-util{grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:calc(5px * var(--swx-scale)) calc(8px * var(--swx-scale));border-radius:12px;background:var(--swx-surface);border:1px solid var(--swx-port-border);font-size:calc(10px * var(--swx-scale));font-weight:700;color:var(--swx-text);}',
     '.swx-port-util-label{font-size:calc(10px * var(--swx-scale));letter-spacing:.08em;text-transform:uppercase;color:var(--swx-muted);}',
     '.swx-port-util-value{font-size:calc(11px * var(--swx-scale));color:var(--swx-text);}',
@@ -63,6 +67,7 @@ $layout = $data['layout'] ?? ['row_count' => 2, 'ports_per_row' => 12, 'sfp_port
 $summary = $data['summary'] ?? [];
 $host = $data['host'] ?? [];
 $theme = (string) ($data['visual_theme'] ?? 'light');
+$port_card_label_mode = (int) ($data['port_card_label_mode'] ?? 0);
 $show_overlay = !empty($data['utilization_overlay_enabled']);
 $format_rate = static function(float $bps): string {
     if ($bps <= 0) {
@@ -137,25 +142,7 @@ $title_wrap->addItem((new CDiv($subtitle_parts !== [] ? implode(' / ', $subtitle
 $header->addItem($title_wrap);
 
 $chip_row = (new CDiv())->addClass('swx-chiprow');
-$maintenance = !empty($summary['maintenance']);
-$monitoring_enabled = !array_key_exists('monitoring_enabled', $summary) || !empty($summary['monitoring_enabled']);
 $chip_row
-    ->addItem(
-        (new CDiv())
-            ->addClass('swx-chip')
-            ->addItem((new CTag('span', true, ''))->addClass('swx-chip-dot')->setAttribute('style', '--dot-color: '.($monitoring_enabled ? '#34D399' : '#94A3B8').';'))
-            ->addItem($monitoring_enabled
-                ? $tr('Monitoring on', '监控开启')
-                : $tr('Monitoring off', '监控关闭'))
-    )
-    ->addItem(
-        (new CDiv())
-            ->addClass('swx-chip')
-            ->addItem((new CTag('span', true, ''))->addClass('swx-chip-dot')->setAttribute('style', '--dot-color: '.($maintenance ? '#F59E0B' : '#38BDF8').';'))
-            ->addItem($maintenance
-                ? $tr('Maintenance', '维护中')
-                : $tr('Live mode', '实时模式'))
-    )
     ->addItem(
         (new CDiv())
             ->addClass('swx-chip')
@@ -251,15 +238,11 @@ foreach ($ports as $port) {
 $face = (new CDiv())->addClass('swx-face');
 $panel = (new CDiv())->addClass('swx-panel');
 $panel_head = (new CDiv())->addClass('swx-panel-head');
-$panel_head
-    ->addItem((new CDiv($tr('Ports', '端口面板')))->addClass('swx-panel-title'))
-    ->addItem((new CDiv($show_overlay
-        ? $tr('Telemetry on / %d ports', '遥测开启 / %d 个端口', (int) ($layout['total_ports'] ?? count($ports)))
-        : $tr('Telemetry off / %d ports', '遥测关闭 / %d 个端口', (int) ($layout['total_ports'] ?? count($ports)))))->addClass('swx-panel-badge'));
+$panel_head->addItem((new CDiv($tr('Ports', '端口面板')))->addClass('swx-panel-title'));
 $panel->addItem($panel_head);
 
 $grid = (new CDiv())->addClass('swx-grid');
-$make_port = static function(array $port) use ($show_overlay, $format_rate, $tr) {
+$make_port = static function(array $port) use ($port_card_label_mode, $show_overlay, $format_rate, $tr) {
     $state = $tr('Idle', '空闲');
     if (!empty($port['status_label'])) {
         $state = (string) $port['status_label'];
@@ -270,7 +253,11 @@ $make_port = static function(array $port) use ($show_overlay, $format_rate, $tr)
             : $tr('Online', '在线');
     }
 
-    $display_name = trim((string) ($port['name'] ?? ''));
+    $port_name = trim((string) ($port['name'] ?? ''));
+    $port_description = trim((string) ($port['description'] ?? ''));
+    $display_name = $port_card_label_mode === 1 && $port_description !== ''
+        ? $port_description
+        : $port_name;
     if ($display_name === '' || preg_match('/^(?:GE|SFP)\s+\d+$/i', $display_name) === 1) {
         foreach (['traffic_in_token', 'traffic_out_token', 'speed_token'] as $token_key) {
             $token = trim((string) ($port[$token_key] ?? ''));
@@ -286,9 +273,19 @@ $make_port = static function(array $port) use ($show_overlay, $format_rate, $tr)
 
     $tooltip_parts = [
         $display_name,
-        $tr('Port code: %s', '端口编号：%s', (string) ($port['port_code'] ?? '')),
+        $tr(
+            'Port description: %s',
+            '端口描述：%s',
+            $port_description !== '' ? $port_description : $tr('not set', '未设置')
+        ),
         $tr('State: %s', '状态：%s', $state)
     ];
+    if ($port_name !== '' && $port_name !== $display_name) {
+        $tooltip_parts[] = $tr('Port name: %s', '端口名称：%s', $port_name);
+    }
+    if ($port_description !== '' && $port_description !== $display_name) {
+        $tooltip_parts[] = $tr('Port description: %s', '端口描述：%s', $port_description);
+    }
     if ($show_overlay && isset($port['utilization_percent']) && $port['utilization_percent'] !== null) {
         $tooltip_parts[] = $tr('Utilization: %s%%', '利用率：%s%%', number_format((float) $port['utilization_percent'], 1));
         $tooltip_parts[] = $tr('In: %s', '入流量：%s', $format_rate((float) ($port['traffic_in_bps'] ?? 0.0)));
@@ -356,7 +353,7 @@ $make_port = static function(array $port) use ($show_overlay, $format_rate, $tr)
             $telemetry->addItem(
                 (new CDiv())
                     ->addClass('swx-port-util')
-                    ->addItem((new CDiv($tr('Utilization', '利用率')))->addClass('swx-port-util-label'))
+                    ->addItem((new CDiv($tr('Util', '利用率')))->addClass('swx-port-util-label'))
                     ->addItem((new CDiv(number_format((float) $port['utilization_percent'], 1).'%'))->addClass('swx-port-util-value'))
             );
         }
